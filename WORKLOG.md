@@ -45,6 +45,21 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
   làm phương án 1 (chỉnh tham số tracker trong `modules/tracker_configs/`)
   để giảm nhảy-người cho video ingest MỚI.
 
+## 2026-08-07 17:30 — Claude Code
+- Chạy `modules/track_split.py --apply` cho case `UI_71ea7dd918b2ce62` (phạm
+  vi đã thống nhất) — 3 lượt liên tiếp (16 → 3 → 1 → 0 track nghi ngờ còn
+  lại, vài track bị gộp >2 người nên cần tách nhiều lần, đúng như giới hạn
+  đã ghi trong module). Verify: điểm tách của track `t70` rơi đúng
+  frame 1520/1525 — khớp chính xác ranh giới đã xác nhận bằng mắt trước đó
+  (người đội mũ bảo hiểm kết thúc ở đây, người mặc đồ xanh bắt đầu). DB
+  integrity_check: ok. Case này giờ có 97 track (từ 81 track gốc).
+- Các case khác (test1_f3f914, TEST_CASE_01...) CHƯA được xử lý — theo đúng
+  phạm vi đã thống nhất (nhiều track ở đó là dữ liệu test tổng hợp, không
+  phải ảnh CCTV thật).
+- Tiếp theo: chuyển sang phương án 1 (chỉnh `modules/tracker_configs/*.yaml`)
+  để giảm nhảy-người cho video ingest MỚI sau này (đã thống nhất "làm lần
+  lượt" — xong tách track mới sang chỉnh tracker).
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
