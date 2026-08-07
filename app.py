@@ -47,8 +47,8 @@ from appearance import (  # noqa: E402
 )
 from demo_search import (  # noqa: E402
     MIN_CONFIDENT_SCORE, VLM_POOL_PER_VIDEO, add_video_to_case, clear_case_videos, create_case,
-    filter_prescreen_for_vlm, get_reference_appearance_multi, get_web_video_path, group_top_k_per_video,
-    list_cases, list_track_ids_for_video, list_videos_in_case, refine_with_vlm, search,
+    filter_prescreen_for_vlm, get_reference_appearance_multi, get_track_frame_ranges, get_web_video_path,
+    group_top_k_per_video, list_cases, list_track_ids_for_video, list_videos_in_case, refine_with_vlm, search,
 )
 from highlight_video import build_highlighted_video  # noqa: E402
 import audit_log  # noqa: E402
@@ -149,8 +149,15 @@ def build_player_html(case_id: str, video_id: str, candidates: list[dict], highl
             }
             for i, c in enumerate(this_video_candidates)
         ]
+        # Cache key phải phụ thuộc phạm vi khung hình HIỆN TẠI của từng track,
+        # không chỉ tên track_id — modules/track_split.py có thể rút ngắn 1
+        # track_id đã có sẵn (khi tách), nếu chỉ hash tên track_id thì video
+        # đã cache TRƯỚC khi tách sẽ bị dùng nhầm (khung vẽ sai vị trí/thời
+        # điểm — lỗi thực tế đã gặp, xem WORKLOG.md).
+        all_relevant_ids = [t["track_id"] for t in track_specs] + arrow_track_ids
+        frame_ranges = get_track_frame_ranges(DB_PATH, all_relevant_ids)
         cache_key = hashlib.sha1(
-            ",".join(sorted([t["track_id"] for t in track_specs] + arrow_track_ids)).encode()
+            ",".join(sorted(f"{tid}:{frame_ranges.get(tid)}" for tid in all_relevant_ids)).encode()
         ).hexdigest()[:10]
         highlighted_path = str(Path(OUTPUT_DIR) / case_id / "web" / f"{video_id}_hl_{cache_key}.mp4")
         web_path = build_highlighted_video(

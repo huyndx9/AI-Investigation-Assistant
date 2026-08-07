@@ -102,6 +102,30 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
      họ**. Tôi không đụng tới 2 mục này.
 - Không còn việc gì treo lại từ phía tôi tại thời điểm này.
 
+## 2026-08-07 19:00 — Claude Code
+- **Bug thật do chính track_split.py gây ra**: Bạn báo "khung hiển thị nhầm
+  đối tượng, có lúc không hiện khung, dù ảnh ứng viên phù hợp vẫn đúng".
+  Nguyên nhân: `build_player_html()` (app.py) cache video có vẽ khung theo
+  key = hash(TÊN track_id) — nhưng `track_split.py` lại RÚT NGẮN phạm vi
+  khung hình của 1 track_id ĐÃ CÓ SẴN khi tách (vd `t70` từ 1475-1575 xuống
+  còn 1475-1520). Nếu video đã cache TRƯỚC khi tách mà sau đó bị dùng lại
+  do trùng tên track_id, khung sẽ vẽ theo phạm vi CŨ — sai vị trí/thời điểm.
+- **Đã sửa**: thêm `get_track_frame_ranges()` (`modules/demo_search.py`),
+  cache key giờ hash cả `(track_id, first_frame, last_frame)` — đổi phạm vi
+  khung hình (do tách track) sẽ tự làm cache miss, buộc vẽ lại. Verify thật:
+  dùng chính 1 crop của track `t187` (track tách ra) làm ảnh tham chiếu →
+  match đúng chính nó (điểm 0.886) → sinh video mới (cache key đổi từ
+  `37a5e3bff4` sang `c8faf0f204`, xác nhận không dùng nhầm cache cũ) →
+  trích frame thật trong đúng khoảng 580-620 → khung đỏ khớp chính xác
+  người trong ảnh tham chiếu. Restart server, không lỗi.
+- File cache cũ (trước khi sửa) vẫn còn nằm rải rác trong `output/*/web/`
+  — không còn bị dùng nhầm nữa (hash khác nên không match), chỉ là rác vô
+  hại, chưa dọn (không ảnh hưởng tính đúng đắn).
+- **Lưu ý quan trọng cho tương lai**: bất kỳ script nào sau này MUTATE dữ
+  liệu track/crop đã có sẵn (không chỉ thêm mới) đều cần rà lại xem cache
+  key ở nơi khác có dựa trên dữ liệu đã đổi hay không — đây là lỗi thuộc
+  nhóm "cache invalidation", dễ tái diễn ở chỗ khác nếu không để ý.
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.

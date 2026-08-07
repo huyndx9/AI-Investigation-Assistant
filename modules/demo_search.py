@@ -162,6 +162,26 @@ def list_track_ids_for_video(db_path: str, video_id: str) -> list[str]:
     return [r[0] for r in rows]
 
 
+def get_track_frame_ranges(db_path: str, track_ids: list[str]) -> dict[str, tuple[int, int]]:
+    """(first_frame, last_frame) hiện tại của từng track — dùng để tính cache
+    key cho video có vẽ khung (xem build_player_html trong app.py). BẮT BUỘC
+    dùng thêm dữ liệu này thay vì chỉ track_id: modules/track_split.py có
+    thể ĐỔI phạm vi khung hình của 1 track_id ĐÃ CÓ SẴN (rút ngắn track gốc
+    khi tách) — nếu cache key chỉ dựa trên tên track_id, video đã cache từ
+    trước khi tách sẽ bị dùng nhầm (vẽ khung theo phạm vi CŨ, sai vị trí/thời
+    điểm — lỗi thực tế đã gặp, xem WORKLOG.md)."""
+    if not track_ids:
+        return {}
+    conn = sqlite3.connect(db_path)
+    placeholders = ",".join("?" * len(track_ids))
+    rows = conn.execute(
+        f"SELECT track_id, first_frame, last_frame FROM tracks WHERE track_id IN ({placeholders})",
+        track_ids,
+    ).fetchall()
+    conn.close()
+    return {r[0]: (r[1], r[2]) for r in rows}
+
+
 def get_web_video_path(db_path: str, case_id: str, video_id: str, output_dir: str = "output") -> str | None:
     """Đường dẫn bản mp4 phát-được-trên-trình-duyệt cho 1 video trong case,
     tự chuyển mã lần đầu và tái dùng (cache) các lần sau. Trả None nếu
