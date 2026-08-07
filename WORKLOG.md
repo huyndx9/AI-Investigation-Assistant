@@ -20,6 +20,31 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
 3. Không cần dài dòng — mục tiêu là đủ để người khác không bị bất ngờ, không
    phải báo cáo đầy đủ.
 
+## 2026-08-07 17:10 — Claude Code
+- Làm xong 2 việc trên branch `feature/track-stability` (stack trên
+  `feature/audit-log`, chưa merge cái nào vào `master`):
+  1. **`modules/track_split.py`** (mới) — phát hiện + tách track bị "nhảy
+     người" (tracker gán nhầm 1 track_id cho 2 người khác nhau giữa chừng).
+     Xác nhận NGUYÊN NHÂN bằng ảnh crop thật trước khi viết code (track
+     `c1a19c1b-..._t70`, case `UI_71ea7dd918b2ce62`: đầu track là người đội
+     mũ bảo hiểm, cuối track là người khác mặc đồng phục xanh). Quét toàn
+     DB: 87 track nghi ngờ, nhưng phát hiện 1 số case cũ (`test1_f3f914`)
+     dùng crop kiểu silhouette màu (dữ liệu test tổng hợp, không phải ảnh
+     thật) — CHƯA chạy `--apply` cho case nào, đang chờ xác nhận phạm vi.
+  2. **Mũi tên xanh cho track không khớp** — `modules/highlight_video.py` +
+     `modules/demo_search.py` (`list_track_ids_for_video`) + `app.py`
+     (`build_player_html`): video kết quả giờ vẽ khung (như cũ) cho ứng viên
+     khớp, VÀ mũi tên xanh nhỏ trên đầu cho MỌI track khác đã tạo trong video
+     đó (kể cả không khớp) — giúp phân biệt "có track nhưng không đủ điểm"
+     (có mũi tên) với "không hề phát hiện được" (không có gì). Verify bằng
+     cách gọi trực tiếp `build_highlighted_video()` + trích frame thật bằng
+     cv2, xác nhận cả khung đỏ + mũi tên xanh cùng hiển thị đúng.
+- **Lưu ý cho người tiếp theo**: `image.png`/README dòng 10 vẫn treo. Cả
+  `feature/audit-log` và `feature/track-stability` đều CHƯA merge vào
+  `master`. Việc tiếp theo đã thống nhất: sau khi xong tách track, quay lại
+  làm phương án 1 (chỉnh tham số tracker trong `modules/tracker_configs/`)
+  để giảm nhảy-người cho video ingest MỚI.
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
@@ -46,6 +71,16 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
 - **Lưu ý cho người tiếp theo**: `image.png`/README dòng 10 vẫn còn treo,
   chưa quyết định. Chưa merge `feature/audit-log` vào `master` — đang chờ
   xác nhận trước khi merge/commit theo đúng quy tắc làm việc.
+
+## 2026-08-07 16:00 — VS Code AI
+- Đã tạo workflow benchmark nhỏ ở `modules/benchmark.py` và test mẫu ở
+  `tests/test_benchmark.py`.
+- Workflow hiện hỗ trợ đánh nhãn candidate theo feedback (`same_person`/
+  `different_person`) và tính `top1_accuracy` cơ bản.
+- Đã verify bằng `python -m unittest discover -s tests -p 'test_benchmark.py'`:
+  2 tests passed.
+- Lưu ý cho người tiếp theo: cần chạy một run search thực tế rồi dùng module
+  này để sinh JSON benchmark đầu tiên.
 
 ---
 

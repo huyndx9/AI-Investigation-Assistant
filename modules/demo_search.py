@@ -151,6 +151,17 @@ def list_videos_in_case(db_path: str, case_id: str) -> list[dict]:
     ]
 
 
+def list_track_ids_for_video(db_path: str, video_id: str) -> list[str]:
+    """Toàn bộ track_id đã được tạo cho 1 video — kể cả track KHÔNG lọt vào
+    kết quả tìm kiếm. Dùng để vẽ mũi tên "đã có track" trên video kết quả,
+    phân biệt với người hệ thống hoàn toàn không phát hiện được (xem
+    modules/highlight_video.py)."""
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("SELECT track_id FROM tracks WHERE video_id = ?", (video_id,)).fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+
 def get_web_video_path(db_path: str, case_id: str, video_id: str, output_dir: str = "output") -> str | None:
     """Đường dẫn bản mp4 phát-được-trên-trình-duyệt cho 1 video trong case,
     tự chuyển mã lần đầu và tái dùng (cache) các lần sau. Trả None nếu

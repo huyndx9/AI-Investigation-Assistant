@@ -48,7 +48,7 @@ from appearance import (  # noqa: E402
 from demo_search import (  # noqa: E402
     MIN_CONFIDENT_SCORE, VLM_POOL_PER_VIDEO, add_video_to_case, clear_case_videos, create_case,
     filter_prescreen_for_vlm, get_reference_appearance_multi, get_web_video_path, group_top_k_per_video,
-    list_cases, list_videos_in_case, refine_with_vlm, search,
+    list_cases, list_track_ids_for_video, list_videos_in_case, refine_with_vlm, search,
 )
 from highlight_video import build_highlighted_video  # noqa: E402
 import audit_log  # noqa: E402
@@ -129,7 +129,15 @@ def build_player_html(case_id: str, video_id: str, candidates: list[dict], highl
     duration = (video["total_frames"] / video["fps"]) if video["fps"] else 0
     this_video_candidates = [c for c in candidates if c["video_id"] == video_id]
 
-    if this_video_candidates:
+    # Mọi track ĐÃ được tạo cho video này (kể cả không lọt vào kết quả tìm
+    # kiếm) — vẽ mũi tên xanh nhỏ trên đầu cho các track này, để phân biệt
+    # "hệ thống có thấy nhưng không đủ điểm khớp" (có mũi tên) với "hệ thống
+    # hoàn toàn không phát hiện được" (không có gì) — trước đây chỉ vẽ khung
+    # ứng viên khớp nên 2 trường hợp này không phân biệt được bằng mắt.
+    candidate_track_ids = {c["track_id"] for c in this_video_candidates}
+    arrow_track_ids = [tid for tid in list_track_ids_for_video(DB_PATH, video_id) if tid not in candidate_track_ids]
+
+    if this_video_candidates or arrow_track_ids:
         # Vẽ khung + nhãn cho các track ứng viên, cùng màu với vạch trên
         # timeline bên dưới để dễ đối chiếu — cache theo bộ track_id cụ thể
         # (đổi kết quả tìm kiếm khác sẽ tạo bản mới, không dùng nhầm bản cũ).
@@ -141,9 +149,14 @@ def build_player_html(case_id: str, video_id: str, candidates: list[dict], highl
             }
             for i, c in enumerate(this_video_candidates)
         ]
-        cache_key = hashlib.sha1(",".join(sorted(t["track_id"] for t in track_specs)).encode()).hexdigest()[:10]
+        cache_key = hashlib.sha1(
+            ",".join(sorted([t["track_id"] for t in track_specs] + arrow_track_ids)).encode()
+        ).hexdigest()[:10]
         highlighted_path = str(Path(OUTPUT_DIR) / case_id / "web" / f"{video_id}_hl_{cache_key}.mp4")
-        web_path = build_highlighted_video(DB_PATH, video["source_path"], video_id, track_specs, highlighted_path)
+        web_path = build_highlighted_video(
+            DB_PATH, video["source_path"], video_id, track_specs, highlighted_path,
+            arrow_track_ids=arrow_track_ids,
+        )
     else:
         web_path = get_web_video_path(DB_PATH, case_id, video_id, OUTPUT_DIR)
 
