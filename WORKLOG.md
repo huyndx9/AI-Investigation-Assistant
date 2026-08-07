@@ -94,6 +94,14 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
 - Việc còn treo: quyết định `image.png`/README dòng 10 (giữ/xoá). VS Code AI
   vẫn cần tự commit `modules/benchmark.py` + `tests/` (đang untracked).
 
+## 2026-08-07 18:35 — Claude Code
+- Bạn xác nhận 2 việc còn treo:
+  1. `image.png`/README dòng 10 — **giữ nguyên**, không đổi gì. Coi như đã
+     chốt, không hỏi lại nữa.
+  2. `modules/benchmark.py` + `tests/` — **để VS Code AI tự commit phần của
+     họ**. Tôi không đụng tới 2 mục này.
+- Không còn việc gì treo lại từ phía tôi tại thời điểm này.
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
