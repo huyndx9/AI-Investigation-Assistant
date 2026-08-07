@@ -60,6 +60,25 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
   để giảm nhảy-người cho video ingest MỚI sau này (đã thống nhất "làm lần
   lượt" — xong tách track mới sang chỉnh tracker).
 
+## 2026-08-07 18:00 — Claude Code
+- Xong phương án 1: chỉnh `modules/tracker_configs/bytetrack_conservative.yaml`
+  — `track_buffer` 10 → 5. Không đoán mò: tính ra track_buffer=10 tương
+  đương 2.0 GIÂY THẬT (10 keyframe × 1/sample_fps=0.2s) là cửa sổ cho phép
+  ghép nhầm người — quá dài cho cảnh đông người. Kiểm chứng thực nghiệm:
+  ingest lại ĐÚNG video đã lỗi (case scratch riêng, không đụng dữ liệu thật)
+  với config mới → số track nghi ngờ gộp nhầm giảm từ 16 xuống 11 (đo bằng
+  `track_split.py`, cùng 1 video, chỉ đổi track_buffer). Cải thiện thật
+  nhưng KHÔNG triệt để — đúng như đã ghi sẵn trong comment cũ của file này.
+- Cả `track_buffer` mới lẫn `track_split.py` đều KHÔNG được benchmark trên
+  tập dữ liệu lớn/đa dạng có ground-truth (giới hạn đã biết, ghi trong
+  README) — 2 thay đổi này bổ trợ nhau (tracker giảm rủi ro cho video ingest
+  MỚI, track_split sửa dữ liệu ĐÃ CÓ) chứ không thay thế việc cần benchmark
+  nghiêm túc sau này.
+- Đã hoàn thành cả 3 việc thống nhất "làm lần lượt": (1) tách track cũ,
+  (2) mũi tên đánh dấu track không khớp, (3) chỉnh tracker. Cả 2 branch
+  (`feature/audit-log`, `feature/track-stability`) vẫn CHƯA merge vào
+  `master` — chờ xác nhận.
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
