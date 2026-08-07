@@ -1,0 +1,29 @@
+# Secrets — không bao giờ commit
+.env
+
+# Ảnh CCTV thật, nhạy cảm — đã cân nhắc và TỪ CHỐI đưa vào README/tài liệu dự án
+# (bài báo chưa xác minh được, khả năng không có quyền phân phối lại, vụ án
+# thật chưa có kết luận). Giữ file trên đĩa (không xoá) nhưng không đưa vào
+# lịch sử git — 1 khi đã commit thì gần như không thể xoá sạch khỏi lịch sử.
+image.png
+
+# Python
+__pycache__/
+*.pyc
+
+# Dữ liệu case (SQLite) — thay đổi liên tục mỗi lần ingest/search, không phải
+# source code, không nên theo dõi bằng git.
+*.db
+*.db-journal
+
+# Output sinh ra khi chạy pipeline (crop ảnh, video highlight...) — tái tạo
+# được từ video gốc + code, không cần lưu trong git.
+output/
+
+# Dữ liệu/video test cục bộ (837MB) — không phải source code.
+test_assets/
+
+# Model weights — file nhị phân lớn, không nên nằm trong git history.
+# Cần có sẵn trên đĩa để app chạy được (xem README mục Cài đặt).
+*.onnx
+*.pt

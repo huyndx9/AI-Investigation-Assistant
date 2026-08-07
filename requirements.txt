@@ -1,0 +1,30 @@
+# AI Investigation Assistant — dependencies
+#
+# Lưu ý về torch/torchvision/onnxruntime-gpu: các bản này gắn với 1 CUDA tag
+# cụ thể (cu126, khớp driver NVIDIA đang cài — CUDA tối đa 13.0). Không tự ý
+# `pip install --upgrade` các package torch/torchvision/onnxruntime-gpu — cần
+# cài lại đúng theo index URL bên dưới, không phải PyPI mặc định.
+#
+#   pip install torch==2.13.0+cu126 torchvision==0.28.0+cu126 \
+#       --index-url https://download.pytorch.org/whl/cu126
+#   pip install onnxruntime-gpu==1.28.0
+#
+# onnxruntime-gpu hiện đang CHẠY TRÊN CPU trên máy dev (thiếu CUDA Toolkit
+# 13.x + cuDNN 9.x hệ thống — pip không cài các thư viện này, khác với
+# torch tự đóng gói CUDA runtime trong wheel). Vẫn đúng kết quả, chỉ chậm
+# hơn ở bước trích embedding ReID (modules/embedding.py). Xem
+# C:\Users\PC\.claude\plans\idempotent-zooming-kurzweil.md để biết chi tiết
+# và cách nâng cấp lên GPU thật cho bước này nếu cần.
+
+torch==2.13.0+cu126
+torchvision==0.28.0+cu126
+ultralytics==8.4.115
+ultralytics-thop==2.1.6
+onnxruntime-gpu==1.28.0
+onnx==1.22.0
+opencv-python==5.0.0.93
+numpy==2.5.1
+gradio==6.22.0
+gradio_client==2.6.0
+openai==2.53.0
+imageio-ffmpeg==0.6.0

@@ -1,0 +1,36 @@
+# KHÔNG PHẢI CẤU HÌNH ĐANG DÙNG — giữ lại làm tài liệu cho một hướng đã thử
+# và KHÔNG hiệu quả. Cấu hình đang dùng thật sự là
+# modules/tracker_configs/bytetrack_conservative.yaml — xem giải thích đầy đủ
+# trong file đó.
+#
+# Đã thử: dùng BoT-SORT + ReID (so khớp bằng đặc điểm ngoại hình) để giảm
+# hiện tượng đổi track_id khi một người di chuyển sang vùng khác của khung
+# hình. Kết quả: appearance_thresh thấp (0.3) gây gộp nhầm 2 người khác nhau
+# vào 1 track_id; appearance_thresh mặc định (0.8) thì track giống hệt kết
+# quả ByteTrack thường — vì BoT-SORT chỉ dùng embedding để "cứu" match yếu về
+# motion (dists = min(iou_dist, emb_dist)), không có quyền phủ quyết khi
+# IOU/Kalman đã tự tin ghép (dù ghép sai). Không giải quyết được vấn đề gốc.
+
+tracker_type: botsort
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.25
+track_buffer: 60          # tăng so với mặc định (30) — cho phép track "sống lại"
+                          # sau khoảng che khuất dài hơn, an toàn hơn vì đã có ReID hỗ trợ
+match_thresh: 0.8
+fuse_score: True
+
+gmc_method: sparseOptFlow
+
+proximity_thresh: 0.5
+appearance_thresh: 0.8   # GIỮ NGUYÊN mặc định — đã thử hạ xuống 0.3 để giảm phân
+                         # mảnh track, nhưng gây lỗi nghiêm trọng hơn: 2 người khác
+                         # nhau bị gộp chung 1 track_id (kiểm chứng bằng mắt trên
+                         # video test, xem ghi chú trong pipeline_ingest.py).
+                         # Đối với công cụ bằng chứng, gộp nhầm người nguy hiểm hơn
+                         # nhiều so với 1 người bị tách nhiều track_id — thà tách
+                         # nhầm (điều tra viên tự nhận ra được) còn hơn gộp nhầm.
+with_reid: True
+model: yolo26n-reid.onnx  # model ReID chuyên dụng (tự tải về) — "auto" chỉ tái dùng
+                          # feature thô của detector, không đủ phân biệt danh tính,
+                          # đã thử và không cải thiện được hiện tượng đổi track_id

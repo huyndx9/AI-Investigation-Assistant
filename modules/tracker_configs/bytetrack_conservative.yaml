@@ -1,0 +1,42 @@
+# Cấu hình ByteTrack tuỳ chỉnh cho Module 1 — dựa trên bytetrack.yaml mặc định
+# của ultralytics, giảm track_buffer để ưu tiên an toàn.
+#
+# Bối cảnh: đã thử BoT-SORT + ReID (xem modules/tracker_configs/botsort_reid.yaml)
+# để giảm hiện tượng một người bị đổi track_id khi đi qua vùng khác của khung
+# hình. Kết quả kiểm chứng bằng mắt trên video test (vtest.avi):
+#
+# 1. ReID KHÔNG sửa được vấn đề đổi track_id, vì BoT-SORT chỉ dùng appearance
+#    embedding để "cứu" các match yếu về motion — khi IOU/Kalman đã tự tin
+#    ghép một track cũ với một detection mới, embedding không có quyền phủ
+#    quyết (xem ultralytics/trackers/bot_sort.py: dists = np.minimum(dists,
+#    emb_dists) — appearance chỉ có thể làm match DỄ hơn, không thể làm khó hơn).
+# 2. Vấn đề thật sự nghiêm trọng hơn dự kiến: track_buffer=30 mặc định (tính
+#    theo số lần gọi track(), tức số keyframe, không phải số frame gốc) đủ
+#    dài để một track "mất dấu" (do người rời khỏi khung hình) bị ghép nhầm
+#    với một NGƯỜI KHÁC bước vào đúng vị trí đó sau đó — đã xác nhận bằng mắt:
+#    track_id t13 trên vtest.avi đổi từ người áo đen sang người áo đỏ ở
+#    khoảng frame 60-104, TỒN TẠI SẴN trong ByteTrack mặc định, không phải lỗi
+#    do việc thêm ReID gây ra.
+# 3. Theo nguyên tắc Evidence Driven (CLAUDE.md/PRD): 1 người bị tách thành
+#    nhiều track_id (phân mảnh) an toàn hơn nhiều so với 2 người bị gộp nhầm
+#    thành 1 track_id — điều tra viên tự nhận ra phân mảnh bằng mắt được,
+#    nhưng gộp nhầm có thể đánh lừa cả điều tra viên. Vì vậy ưu tiên giảm
+#    track_buffer để thu hẹp cửa sổ có thể ghép nhầm, chấp nhận phân mảnh
+#    nhiều hơn một chút.
+#
+# Đây KHÔNG phải giải pháp triệt để — chỉ giảm rủi ro, không loại bỏ hoàn
+# toàn khả năng ghép nhầm khi hai người đi theo đúng quỹ đạo nhau ở khoảng
+# cách thời gian ngắn. Giải quyết triệt để (re-identification dựa trên toàn
+# bộ feature vector, có điểm tin cậy hiển thị rõ cho điều tra viên) thuộc về
+# Evidence Fusion ở giai đoạn sau, không phải trách nhiệm của tracker trong
+# Module 1.
+
+tracker_type: bytetrack
+track_high_thresh: 0.25
+track_low_thresh: 0.1
+new_track_thresh: 0.3      # tăng nhẹ so với mặc định (0.25) — thiên về tạo track
+                           # mới thay vì ghép khi không chắc chắn
+track_buffer: 10           # giảm mạnh so với mặc định (30) — thu hẹp cửa sổ có
+                           # thể ghép nhầm người khác vào track đã mất dấu
+match_thresh: 0.8
+fuse_score: True
