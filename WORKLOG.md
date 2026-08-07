@@ -79,6 +79,21 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
   (`feature/audit-log`, `feature/track-stability`) vẫn CHƯA merge vào
   `master` — chờ xác nhận.
 
+## 2026-08-07 18:30 — Claude Code
+- Test thêm qua UI thật trên `master` trước khi merge (theo yêu cầu): chọn
+  lại đúng case `UI_71ea7dd918b2ce62` (đã tách track + tuning tracker),
+  xác nhận video kết quả tự động dùng bản có mũi tên ngay cả khi CHƯA tìm
+  kiếm (0 candidates), trích frame thật từ file video sinh ra để xem bằng
+  mắt — mũi tên xanh hiển thị đúng. Chạy search thật (2 ảnh tham chiếu tự
+  chụp từ chính video này) — audit log ghi đúng cả 2 lần (kể cả lần 0 kết
+  quả), không lỗi server (chỉ có traceback asyncio vô hại quen thuộc).
+- **Đã merge `feature/audit-log` + `feature/track-stability` vào `master`**
+  (fast-forward, không xung đột — `master` trước đó vẫn ở đúng initial
+  commit nên merge sạch). Đã xoá 2 branch tạm sau khi merge xong.
+  `master` hiện tại: `cfe6eb1`.
+- Việc còn treo: quyết định `image.png`/README dòng 10 (giữ/xoá). VS Code AI
+  vẫn cần tự commit `modules/benchmark.py` + `tests/` (đang untracked).
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
