@@ -126,6 +126,28 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
   key ở nơi khác có dựa trên dữ liệu đã đổi hay không — đây là lỗi thuộc
   nhóm "cache invalidation", dễ tái diễn ở chỗ khác nếu không để ý.
 
+## 2026-08-07 19:15 — Claude Code
+- Đã sửa lý do gốc khiến bạn vẫn thấy "nhiều kết quả hiển thị sai" sau lần
+  fix trước: lần trước tôi CHỈ chạy `track_split.py --apply` cho 1 case
+  (`UI_71ea7dd918b2ce62`), 71 track nghi ngờ ở các case khác vẫn chưa sửa.
+  Rà lại kỹ hơn: nhận định "case cũ = dữ liệu test tổng hợp" trước đây quá
+  rộng — thực ra chỉ ĐÚNG 1 video duy nhất (`vtest_seg_annotated.mp4` trong
+  case `test1_f3f914` — video debug/visualization bị lỡ ingest như nguồn
+  thật, crop kiểu silhouette màu), còn lại mọi video khác ở mọi case đều là
+  video benchmark thật, hợp lệ để sửa.
+- Bạn xác nhận mở rộng phạm vi — đã chạy `--apply` (nhiều lượt tới khi sạch)
+  cho toàn bộ case còn lại: `benchmark_combined_6430af` (5→0),
+  `da_camera_test_goc_quay_khac_nhau_4a668d` (7→0),
+  `terrace_2_goc_camera_d8cb89` (16→3→0), `UI_7386199102492dfd` (3→0),
+  `TEST_CASE_01` (4→1→0), `vu_an_test_da_video_a17ac2` (4→1→0),
+  `test1_f3f914` (27→4→0, dùng script lọc riêng để LOẠI TRỪ video debug
+  nói trên).
+- Quét lại toàn DB: chỉ còn đúng 5 track thuộc video debug đã loại trừ có
+  chủ đích — mọi case dữ liệu thật đã sạch hoàn toàn. `PRAGMA
+  integrity_check`: ok. Tổng track trong DB: 1574 (từ ~1479 ban đầu).
+  Không có thay đổi code (chỉ mutate `case.db`, đã gitignore) — không cần
+  restart server, đã kiểm tra log không lỗi thật.
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
