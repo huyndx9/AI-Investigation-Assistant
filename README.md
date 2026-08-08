@@ -28,7 +28,6 @@ Ba nguyên tắc trên xuyên suốt toàn bộ pipeline — xem thêm `PRD_AI_I
 - **Kết quả theo từng video, không bị 1 camera "chiếm hết chỗ"** — mỗi video/camera luôn được xét công bằng, tối đa N ứng viên hiển thị mỗi video (không phải toàn case).
 - **Trình phát video có timeline đánh dấu** — bấm vào ứng viên để nhảy thẳng tới đoạn nghi có đối tượng.
 - **Lộ trình trên bản đồ (mở rộng, tuỳ chọn)** — thiết lập vị trí + giờ quay thực cho từng camera, hệ thống nối các lần xuất hiện theo thời gian thành gợi ý lộ trình (không phải kết luận chắc chắn), mỗi camera chỉ 1 điểm đại diện.
-- **Nhật ký kiểm toán (audit log)** — mọi lần tìm kiếm (case, ảnh tham chiếu, tham số, toàn bộ ứng viên kèm lý do xếp hạng) được ghi lại tự động; điều tra viên có thể chấm "Đúng/Sai/Cần xem lại" cho từng ứng viên ngay trong Evidence panel.
 
 ## Kiến trúc / các module
 
@@ -44,11 +43,8 @@ Ba nguyên tắc trên xuyên suốt toàn bộ pipeline — xem thêm `PRD_AI_I
 | `modules/video_transcode.py` | Chuyển mã video gốc sang H.264/mp4 để phát được trên trình duyệt — không đụng tới file gốc dùng cho xử lý AI. |
 | `modules/highlight_video.py` | Dựng bản video có vẽ khung/nhãn cho track ứng viên, phục vụ xem trực tiếp trong UI. |
 | `modules/visualize_tracks.py` | Công cụ debug — vẽ lại bbox/track_id đã lưu trong DB để tự kiểm tra bằng mắt (không chạy lại model). |
-| `modules/audit_log.py` | Ghi nhật ký mọi lần tìm kiếm + feedback điều tra viên (FR-15..17 trong PRD) — chỉ có hàm ghi, không có sửa/xoá qua UI. |
-| `modules/track_split.py` | Công cụ sửa dữ liệu đã ingest — phát hiện + tách track bị tracker gán nhầm cho 2 người khác nhau giữa chừng, dựa vào điểm gãy trong embedding ReID. |
-| `modules/ground_truth.py` | Sinh cặp ground-truth tự động (từ track giao nhau về thời gian + track ổn định nội tại) để đo khách quan false positive/negative rate của bước xếp hạng, thay vì chỉnh tay không kiểm chứng được. |
 
-Dữ liệu lưu trong SQLite (`case.db`): `cases`, `videos`, `tracks`, `track_crops`, `features_appearance`, `features_embedding`, và các bảng phụ `video_geo`, `search_runs`/`search_run_candidates`/`candidate_feedback` (module mở rộng).
+Dữ liệu lưu trong SQLite (`case.db`): `cases`, `videos`, `tracks`, `track_crops`, `features_appearance`, `features_embedding`, và bảng phụ `video_geo` (module mở rộng).
 
 ## Cài đặt
 
@@ -82,9 +78,10 @@ Mở `http://localhost:7860`.
 
 ## Giới hạn đã biết — chưa sẵn sàng cho thực tế
 
-- **Chỉ là công cụ lọc sơ bộ (triage), không phải công cụ ra quyết định.** Đo được bằng ground-truth tự động (`modules/ground_truth.py`, 2880 cặp chắc chắn khác người + 300 cặp có khả năng cùng người, xem `ground_truth_pairs.json`): ở ngưỡng hiện tại, **~33% cặp CHẮC CHẮN khác người vẫn vượt ngưỡng tin cậy** (false positive rate) — là tín hiệu xếp hạng, không phải bằng chứng chắc chắn. Có phương án giảm còn ~17.5% bằng cách chỉnh lại ngưỡng (đổi lại tăng tỷ lệ bỏ sót người đúng từ ~2.3% lên ~10%) — chưa áp dụng, đang chờ quyết định đánh đổi.
-- **Phân loại màu áo/quần nhạy với ánh sáng (color constancy)** — đã xác nhận cụ thể: 1 track áo nâu/be bị nhận nhầm "đen" vì đa số crop nhỏ/xa camera thiếu sáng. Đã sửa 1 phần (gộp màu theo trọng số diện tích crop thay vì đếm đều), nhưng thử hạ ngưỡng đen sâu hơn thì phát hiện **cả video có thể bị ám màu** (crop chắc chắn màu đen thật cũng bị đổi thành xanh dương khi hạ ngưỡng) — sửa triệt để cần khôi phục cân bằng trắng, ngoài phạm vi hiện tại.
+- **Chỉ là công cụ lọc sơ bộ (triage), không phải công cụ ra quyết định.** Độ tương đồng ReID đo thực tế có đuôi phân phối chồng lấn giữa "cùng người" và "khác người" (vd 0.35-0.56 cho ca khó cùng người, tới 0.8 cho ca khác người) — là tín hiệu xếp hạng, không phải bằng chứng chắc chắn.
 - **Không xử lý được đổi trang phục** hoặc nhiều người mặc đồ giống nhau (đồng phục...).
+- **Chưa có nhật ký kiểm toán (audit log)** — ai tìm gì, lúc nào — thường là yêu cầu bắt buộc nếu dùng làm chứng cứ pháp lý.
+- **Chưa được kiểm chứng trên tập dữ liệu lớn/đa dạng có ground-truth** — các ngưỡng/trọng số hiện tại chỉ hiệu chỉnh từ vài ca test nhỏ (ghi rõ trong code).
 - **Geocode địa chỉ chi tiết ở Hàn Quốc qua OpenStreetMap (miễn phí) độ chính xác còn hạn chế** — cần geocoder chuyên cho Hàn Quốc nếu độ chính xác vị trí quan trọng.
 - **Chưa đánh giá ràng buộc pháp lý/quyền riêng tư** (vd PIPA tại Hàn Quốc) cho loại phân tích video giám sát này.
 

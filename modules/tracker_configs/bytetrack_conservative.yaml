@@ -30,25 +30,13 @@
 # bộ feature vector, có điểm tin cậy hiển thị rõ cho điều tra viên) thuộc về
 # Evidence Fusion ở giai đoạn sau, không phải trách nhiệm của tracker trong
 # Module 1.
-#
-# CẬP NHẬT (sau khi có modules/track_split.py): track_buffer=10 ở trên VẪN
-# không đủ — quét case thật "UI_71ea7dd918b2ce62" (video CCTV thật, đông
-# người, sample_fps=5.0 mặc định) tìm thấy 16 track bị gộp nhầm 2+ người
-# (đã tách bằng track_split.py, xem WORKLOG.md). Tính ra: track_buffer=10
-# keyframe × (1/sample_fps=0.2s) = 2.0 GIÂY THẬT là cửa sổ cho phép ghép 1
-# track đã mất dấu với 1 người hoàn toàn khác bước vào đúng vị trí đó — quá
-# dài cho cảnh đông người. Giảm còn 5 (1.0 giây thật ở sample_fps=5.0) —
-# vẫn không loại bỏ hoàn toàn rủi ro (xem đoạn trên), chỉ thu hẹp thêm cửa
-# sổ, đổi lấy phân mảnh nhiều hơn (chấp nhận được theo nguyên tắc Evidence
-# Driven đã nêu). Lưu ý: track_buffer tính theo SỐ KEYFRAME nên "giây thật"
-# tương đương phụ thuộc sample_fps lúc ingest — đổi sample_fps thì cửa sổ
-# thời gian thật cũng đổi theo dù giá trị track_buffer giữ nguyên.
 
 tracker_type: bytetrack
 track_high_thresh: 0.25
 track_low_thresh: 0.1
 new_track_thresh: 0.3      # tăng nhẹ so với mặc định (0.25) — thiên về tạo track
                            # mới thay vì ghép khi không chắc chắn
-track_buffer: 5            # giảm tiếp từ 10 — xem "CẬP NHẬT" ở trên
+track_buffer: 10           # giảm mạnh so với mặc định (30) — thu hẹp cửa sổ có
+                           # thể ghép nhầm người khác vào track đã mất dấu
 match_thresh: 0.8
 fuse_score: True

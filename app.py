@@ -47,11 +47,10 @@ from appearance import (  # noqa: E402
 )
 from demo_search import (  # noqa: E402
     MIN_CONFIDENT_SCORE, VLM_POOL_PER_VIDEO, add_video_to_case, clear_case_videos, create_case,
-    filter_prescreen_for_vlm, get_reference_appearance_multi, get_track_frame_ranges, get_web_video_path,
-    group_top_k_per_video, list_cases, list_track_ids_for_video, list_videos_in_case, refine_with_vlm, search,
+    filter_prescreen_for_vlm, get_reference_appearance_multi, get_web_video_path, group_top_k_per_video,
+    list_cases, list_videos_in_case, refine_with_vlm, search,
 )
 from highlight_video import build_highlighted_video  # noqa: E402
-import audit_log  # noqa: E402
 import geo_route  # noqa: E402
 import vlm_compare  # noqa: E402
 
@@ -129,15 +128,7 @@ def build_player_html(case_id: str, video_id: str, candidates: list[dict], highl
     duration = (video["total_frames"] / video["fps"]) if video["fps"] else 0
     this_video_candidates = [c for c in candidates if c["video_id"] == video_id]
 
-    # Mọi track ĐÃ được tạo cho video này (kể cả không lọt vào kết quả tìm
-    # kiếm) — vẽ mũi tên xanh nhỏ trên đầu cho các track này, để phân biệt
-    # "hệ thống có thấy nhưng không đủ điểm khớp" (có mũi tên) với "hệ thống
-    # hoàn toàn không phát hiện được" (không có gì) — trước đây chỉ vẽ khung
-    # ứng viên khớp nên 2 trường hợp này không phân biệt được bằng mắt.
-    candidate_track_ids = {c["track_id"] for c in this_video_candidates}
-    arrow_track_ids = [tid for tid in list_track_ids_for_video(DB_PATH, video_id) if tid not in candidate_track_ids]
-
-    if this_video_candidates or arrow_track_ids:
+    if this_video_candidates:
         # Vẽ khung + nhãn cho các track ứng viên, cùng màu với vạch trên
         # timeline bên dưới để dễ đối chiếu — cache theo bộ track_id cụ thể
         # (đổi kết quả tìm kiếm khác sẽ tạo bản mới, không dùng nhầm bản cũ).
@@ -149,21 +140,9 @@ def build_player_html(case_id: str, video_id: str, candidates: list[dict], highl
             }
             for i, c in enumerate(this_video_candidates)
         ]
-        # Cache key phải phụ thuộc phạm vi khung hình HIỆN TẠI của từng track,
-        # không chỉ tên track_id — modules/track_split.py có thể rút ngắn 1
-        # track_id đã có sẵn (khi tách), nếu chỉ hash tên track_id thì video
-        # đã cache TRƯỚC khi tách sẽ bị dùng nhầm (khung vẽ sai vị trí/thời
-        # điểm — lỗi thực tế đã gặp, xem WORKLOG.md).
-        all_relevant_ids = [t["track_id"] for t in track_specs] + arrow_track_ids
-        frame_ranges = get_track_frame_ranges(DB_PATH, all_relevant_ids)
-        cache_key = hashlib.sha1(
-            ",".join(sorted(f"{tid}:{frame_ranges.get(tid)}" for tid in all_relevant_ids)).encode()
-        ).hexdigest()[:10]
+        cache_key = hashlib.sha1(",".join(sorted(t["track_id"] for t in track_specs)).encode()).hexdigest()[:10]
         highlighted_path = str(Path(OUTPUT_DIR) / case_id / "web" / f"{video_id}_hl_{cache_key}.mp4")
-        web_path = build_highlighted_video(
-            DB_PATH, video["source_path"], video_id, track_specs, highlighted_path,
-            arrow_track_ids=arrow_track_ids,
-        )
+        web_path = build_highlighted_video(DB_PATH, video["source_path"], video_id, track_specs, highlighted_path)
     else:
         web_path = get_web_video_path(DB_PATH, case_id, video_id, OUTPUT_DIR)
 
@@ -415,12 +394,12 @@ def on_clear_case_videos(case_id, confirmed):
     if not case_id:
         return (
             gr.update(), gr.update(), "⚠️ Chọn case trước.", gr.update(), None, "*Chưa có kết quả.*", "",
-            "*Chưa có kết quả.*", False, "", "", "", None, None,
+            "*Chưa có kết quả.*", False, "", "", "",
         )
     if not confirmed:
         return (
             gr.update(), gr.update(), "⚠️ Vui lòng tick xác nhận trước khi xoá.",
-            gr.update(), None, "*Chưa có kết quả.*", "", "*Chưa có kết quả.*", False, "", "", "", None, None,
+            gr.update(), None, "*Chưa có kết quả.*", "", "*Chưa có kết quả.*", False, "", "", "",
         )
 
     n = clear_case_videos(DB_PATH, case_id)
@@ -433,7 +412,6 @@ def on_clear_case_videos(case_id, confirmed):
         None, "*Chưa có kết quả.*", "", "*Chưa có kết quả.*",  # candidates_state, gallery, search_status, evidence_panel
         False,  # clear_confirm_input (tự bỏ tick sau khi xoá xong)
         "", "", "",  # geo_address/start_time/status — reset
-        None, None,  # current_run_id_state, current_candidate_state — reset, tránh chấm feedback nhầm lần chạy cũ
     )
 
 
@@ -442,21 +420,17 @@ def on_clear_case_videos(case_id, confirmed):
 # ---------------------------------------------------------------------------
 
 def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress()):
-    # 8 giá trị trả về cho MỌI nhánh (kể cả lỗi sớm): thêm run_id (audit log,
-    # None nếu chưa thực sự chạy search) + candidate đang xem (để nút feedback
-    # Đúng/Sai/Cần xem lại biết đang chấm cho track nào — xem
-    # current_candidate_state, modules/audit_log.py).
     if not case_id:
-        return None, "*Chưa có kết quả.*", "⚠️ Chọn hoặc tạo case trước.", gr.update(), "*Chưa có kết quả.*", gr.update(), None, None
+        return None, "*Chưa có kết quả.*", "⚠️ Chọn hoặc tạo case trước.", gr.update(), "*Chưa có kết quả.*", gr.update()
     if not ref_image_paths:
-        return None, "*Chưa có kết quả.*", "⚠️ Vui lòng chọn ít nhất 1 ảnh tham chiếu.", gr.update(), "*Chưa có kết quả.*", gr.update(), None, None
+        return None, "*Chưa có kết quả.*", "⚠️ Vui lòng chọn ít nhất 1 ảnh tham chiếu.", gr.update(), "*Chưa có kết quả.*", gr.update()
     if use_vlm and not vlm_compare.is_configured():
-        return None, "*Chưa có kết quả.*", f"⚠️ {vlm_compare.get_setup_instructions()}", gr.update(), "*Chưa có kết quả.*", gr.update(), None, None
+        return None, "*Chưa có kết quả.*", f"⚠️ {vlm_compare.get_setup_instructions()}", gr.update(), "*Chưa có kết quả.*", gr.update()
 
     progress(0.1, desc=f"Đang trích đặc điểm từ {len(ref_image_paths)} ảnh tham chiếu...")
     ref_features = get_reference_appearance_multi(ref_image_paths, use_vlm=use_vlm)
     if ref_features is None:
-        return None, "*Chưa có kết quả.*", "❌ Không phát hiện được người trong ảnh tham chiếu nào.", gr.update(), "*Chưa có kết quả.*", gr.update(), None, None
+        return None, "*Chưa có kết quả.*", "❌ Không phát hiện được người trong ảnh tham chiếu nào.", gr.update(), "*Chưa có kết quả.*", gr.update()
 
     progress(0.5, desc="Đang so khớp với các ứng viên trong toàn bộ case...")
     # Khi bật AI thị giác, lấy 1 tập ứng viên RỘNG HƠN "Số ứng viên hiển thị"
@@ -508,8 +482,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
 
     if not candidates:
         status = f"Đặc điểm tham chiếu: {ref_desc}{used_note}. Không tìm thấy ứng viên nào."
-        run_id = audit_log.record_search_run(DB_PATH, case_id, ref_image_paths, ref_desc, top_k, use_vlm, [])
-        return None, build_candidates_html([], all_video_labels), status, gr.update(), "*Chưa có kết quả.*", gr.update(), run_id, None
+        return None, build_candidates_html([], all_video_labels), status, gr.update(), "*Chưa có kết quả.*", gr.update()
 
     # Lọc theo ngưỡng tin cậy tối thiểu — hiển thị ứng viên điểm quá thấp
     # (vd chỉ tình cờ trùng màu áo/quần, ngoại hình thực tế khác hẳn) dễ
@@ -523,8 +496,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
             f"Không tìm thấy đối tượng phù hợp — điểm khớp cao nhất chỉ đạt {best_score:.2f}, "
             f"quá thấp để tin cậy là cùng 1 người (ngưỡng {MIN_CONFIDENT_SCORE})."
         )
-        run_id = audit_log.record_search_run(DB_PATH, case_id, ref_image_paths, ref_desc, top_k, use_vlm, [])
-        return None, build_candidates_html([], all_video_labels), status, gr.update(), "*Chưa có kết quả.*", gr.update(), run_id, None
+        return None, build_candidates_html([], all_video_labels), status, gr.update(), "*Chưa có kết quả.*", gr.update()
 
     candidates_html = build_candidates_html(candidates, all_video_labels)
     videos_summary = _describe_videos_with_matches(candidates)
@@ -534,12 +506,6 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
         f"**Ứng viên phù hợp đủ tiêu chuẩn ({len(candidates)}, tối đa {int(top_k)} người/video):**{vlm_note}"
     )
 
-    # Audit log (FR-15/16): ghi lại truy vấn NÀY (case, ảnh tham chiếu, tham
-    # số) + TOÀN BỘ ứng viên đủ tiêu chuẩn kèm lý do xếp hạng — không chỉ
-    # ứng viên #1 đang hiển thị mặc định, vì điều tra viên có thể bấm xem
-    # ứng viên khác và cần feedback được gắn đúng vào lần chạy này.
-    run_id = audit_log.record_search_run(DB_PATH, case_id, ref_image_paths, ref_desc, top_k, use_vlm, candidates)
-
     top1 = candidates[0]
     player_html = build_player_html(case_id, top1["video_id"], candidates, top1["track_id"])
     video_dropdown_update = gr.update(
@@ -548,7 +514,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
     evidence = build_evidence_panel(top1)
 
     progress(1.0, desc="Xong")
-    return candidates, candidates_html, status, video_dropdown_update, evidence, player_html, run_id, top1
+    return candidates, candidates_html, status, video_dropdown_update, evidence, player_html
 
 
 def on_gallery_click(idx, case_id, candidates):
@@ -556,34 +522,15 @@ def on_gallery_click(idx, case_id, candidates):
     build_candidates_html() — xem giải thích cơ chế ở đó. idx là giá trị số
     do JS ghi vào ô ẩn gallery_click_index."""
     if not candidates or idx is None:
-        return gr.update(), "*Chưa có kết quả.*", gr.update(), gr.update()
+        return gr.update(), "*Chưa có kết quả.*", gr.update()
     idx = int(idx)
     if idx < 0 or idx >= len(candidates):
-        return gr.update(), "*Chưa có kết quả.*", gr.update(), gr.update()
+        return gr.update(), "*Chưa có kết quả.*", gr.update()
     c = candidates[idx]
     player_html = build_player_html(case_id, c["video_id"], candidates, c["track_id"])
     evidence = build_evidence_panel(c)
     video_dropdown_update = gr.update(value=c["video_id"])
-    # Cập nhật current_candidate_state để nút feedback (Đúng/Sai/Cần xem lại)
-    # chấm đúng track đang xem — xem current_run_id_state/current_candidate_state.
-    return video_dropdown_update, evidence, player_html, c
-
-
-def on_feedback(feedback_value, run_id, candidate):
-    """Ghi nhận đánh giá của điều tra viên cho ứng viên đang xem trong
-    Evidence panel (FR-16 mở rộng — audit log không chỉ ghi HỆ THỐNG đề xuất
-    gì mà cả CON NGƯỜI phản hồi thế nào, làm nền cho việc cải tiến sau này)."""
-    if not run_id or not candidate:
-        return "⚠️ Chưa có ứng viên nào đang được chọn để chấm feedback — hãy bấm vào 1 ảnh trong 'Ứng viên phù hợp' trước."
-    audit_log.record_feedback(DB_PATH, run_id, candidate["track_id"], candidate["video_id"], feedback_value)
-    label = audit_log.FEEDBACK_LABELS_VI[feedback_value]
-    return f"✅ Đã ghi nhận: **{label}** cho track `{candidate['track_id'].split('_')[-1]}` (camera {candidate['video_label']})."
-
-
-def _make_feedback_handler(feedback_value):
-    def handler(run_id, candidate):
-        return on_feedback(feedback_value, run_id, candidate)
-    return handler
+    return video_dropdown_update, evidence, player_html
 
 
 # ---------------------------------------------------------------------------
@@ -665,11 +612,6 @@ def on_show_route(case_id, candidates):
 
 with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     candidates_state = gr.State([])
-    # Audit log (FR-15..17): run_id của lần search gần nhất + ứng viên đang
-    # xem trong Evidence panel — cần cả 2 để biết feedback (Đúng/Sai/Cần xem
-    # lại) đang chấm cho ĐÚNG track nào của ĐÚNG lần chạy nào.
-    current_run_id_state = gr.State(None)
-    current_candidate_state = gr.State(None)
     # gr.Number(visible=False) KHÔNG mount DOM trong Gradio 6 (đã xác nhận
     # thực tế: querySelector không tìm thấy input) — nên ô cầu nối JS->Python
     # cho build_candidates_html() phải để visible=True rồi tự ẩn bằng CSS ở
@@ -769,12 +711,6 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
 
             gr.Markdown("## Chi tiết bằng chứng (Evidence)")
             evidence_panel = gr.Markdown("*Chọn 1 ứng viên trong danh sách bên trên để xem chi tiết.*")
-            gr.Markdown("*Đánh giá của bạn cho ứng viên đang xem ở trên — ghi vào audit log, không sửa/xoá được:*")
-            with gr.Row():
-                feedback_correct_btn = gr.Button("✅ Đúng", size="sm")
-                feedback_incorrect_btn = gr.Button("❌ Sai", size="sm")
-                feedback_review_btn = gr.Button("⚠️ Cần xem lại", size="sm")
-            feedback_status = gr.Markdown("")
 
             with gr.Accordion("🗺️ Lộ trình trên bản đồ (mở rộng, tuỳ chọn)", open=False):
                 gr.Markdown(
@@ -808,10 +744,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     search_btn.click(
         run_search,
         inputs=[case_dropdown, ref_images_input, top_k_input, use_vlm_input],
-        outputs=[
-            candidates_state, gallery, search_status, video_dropdown, evidence_panel, player,
-            current_run_id_state, current_candidate_state,
-        ],
+        outputs=[candidates_state, gallery, search_status, video_dropdown, evidence_panel, player],
     )
     clear_videos_btn.click(
         on_clear_case_videos,
@@ -819,30 +752,14 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         outputs=[
             video_dropdown, case_dropdown, clear_status, player,
             candidates_state, gallery, search_status, evidence_panel, clear_confirm_input,
-        ] + geo_field_outputs + [current_run_id_state, current_candidate_state],
+        ] + geo_field_outputs,
     )
     gallery_click_index.change(
         on_gallery_click,
         inputs=[gallery_click_index, case_dropdown, candidates_state],
-        outputs=[video_dropdown, evidence_panel, player, current_candidate_state],
+        outputs=[video_dropdown, evidence_panel, player],
     )
     refresh_cases_btn.click(on_refresh_cases, outputs=[case_dropdown])
-
-    feedback_correct_btn.click(
-        _make_feedback_handler("correct"),
-        inputs=[current_run_id_state, current_candidate_state],
-        outputs=[feedback_status],
-    )
-    feedback_incorrect_btn.click(
-        _make_feedback_handler("incorrect"),
-        inputs=[current_run_id_state, current_candidate_state],
-        outputs=[feedback_status],
-    )
-    feedback_review_btn.click(
-        _make_feedback_handler("needs_review"),
-        inputs=[current_run_id_state, current_candidate_state],
-        outputs=[feedback_status],
-    )
 
     geo_save_btn.click(
         on_save_video_geo,

@@ -151,37 +151,6 @@ def list_videos_in_case(db_path: str, case_id: str) -> list[dict]:
     ]
 
 
-def list_track_ids_for_video(db_path: str, video_id: str) -> list[str]:
-    """Toàn bộ track_id đã được tạo cho 1 video — kể cả track KHÔNG lọt vào
-    kết quả tìm kiếm. Dùng để vẽ mũi tên "đã có track" trên video kết quả,
-    phân biệt với người hệ thống hoàn toàn không phát hiện được (xem
-    modules/highlight_video.py)."""
-    conn = sqlite3.connect(db_path)
-    rows = conn.execute("SELECT track_id FROM tracks WHERE video_id = ?", (video_id,)).fetchall()
-    conn.close()
-    return [r[0] for r in rows]
-
-
-def get_track_frame_ranges(db_path: str, track_ids: list[str]) -> dict[str, tuple[int, int]]:
-    """(first_frame, last_frame) hiện tại của từng track — dùng để tính cache
-    key cho video có vẽ khung (xem build_player_html trong app.py). BẮT BUỘC
-    dùng thêm dữ liệu này thay vì chỉ track_id: modules/track_split.py có
-    thể ĐỔI phạm vi khung hình của 1 track_id ĐÃ CÓ SẴN (rút ngắn track gốc
-    khi tách) — nếu cache key chỉ dựa trên tên track_id, video đã cache từ
-    trước khi tách sẽ bị dùng nhầm (vẽ khung theo phạm vi CŨ, sai vị trí/thời
-    điểm — lỗi thực tế đã gặp, xem WORKLOG.md)."""
-    if not track_ids:
-        return {}
-    conn = sqlite3.connect(db_path)
-    placeholders = ",".join("?" * len(track_ids))
-    rows = conn.execute(
-        f"SELECT track_id, first_frame, last_frame FROM tracks WHERE track_id IN ({placeholders})",
-        track_ids,
-    ).fetchall()
-    conn.close()
-    return {r[0]: (r[1], r[2]) for r in rows}
-
-
 def get_web_video_path(db_path: str, case_id: str, video_id: str, output_dir: str = "output") -> str | None:
     """Đường dẫn bản mp4 phát-được-trên-trình-duyệt cho 1 video trong case,
     tự chuyển mã lần đầu và tái dùng (cache) các lần sau. Trả None nếu
@@ -323,43 +292,25 @@ def get_reference_appearance(image_path: str, conf_threshold: float = 0.3, use_v
     return features
 
 
-def _aggregate_rows(rows: list[dict], attrs: list[str] = ALL_ATTRIBUTES, weights: list[float] | None = None) -> dict:
+def _aggregate_rows(rows: list[dict], attrs: list[str] = ALL_ATTRIBUTES) -> dict:
     """Gộp nhiều dòng appearance (1 dòng / crop, hoặc 1 dòng / ảnh tham
     chiếu) thành 1 bộ đặc điểm đại diện — bỏ phiếu đa số cho từng thuộc
     tính, bỏ qua giá trị "không rõ" khi còn giá trị khác để bỏ phiếu (không
     để "không rõ" làm loãng kết quả nếu phần lớn nguồn đã xác định được).
     attrs mặc định là 6 thuộc tính cổ điển; truyền EXTENDED_REFERENCE_ATTRS
     để gộp các thuộc tính mở rộng (túi/balo, loại trang phục...) qua nhiều
-    ảnh tham chiếu theo cùng logic.
-
-    weights (tuỳ chọn, cùng độ dài với rows): trọng số mỗi dòng khi bỏ phiếu
-    — mặc định None = mỗi dòng 1 phiếu như cũ (dùng khi gộp ảnh tham chiếu,
-    không có khái niệm "diện tích crop"). Khi gộp crop của 1 TRACK, truyền
-    diện tích bbox làm trọng số: đã xác nhận thực tế crop nhỏ/xa camera dễ
-    phân loại màu sai (ít ánh sáng phản chiếu, ngả về "đen") — bỏ phiếu đều
-    tay để crop nhỏ áp đảo số lượng crop lớn/rõ hơn từng gây sai màu áo/quần
-    thật (vd track có 67/76 crop nhỏ báo "đen" trong khi crop lớn, rõ nhất
-    cho thấy màu nâu/be — xem WORKLOG.md)."""
+    ảnh tham chiếu theo cùng logic."""
     agg = {}
     for attr in attrs:
-        if weights is None:
-            pairs = [(r[attr], 1.0) for r in rows if r.get(attr) not in (None,) and r[attr] != "khong_ro"]
-        else:
-            pairs = [
-                (r[attr], w) for r, w in zip(rows, weights)
-                if r.get(attr) not in (None,) and r[attr] != "khong_ro"
-            ]
-        if not pairs:
+        values = [r[attr] for r in rows if r.get(attr) not in (None,) and r[attr] != "khong_ro"]
+        if not values:
             agg[attr] = "khong_ro"
             agg[f"{attr}_confidence"] = 0.0
             continue
-        weighted_counts: dict = defaultdict(float)
-        for value, w in pairs:
-            weighted_counts[value] += w
-        best_value = max(weighted_counts, key=weighted_counts.get)
-        total_weight = sum(weighted_counts.values())
+        counts = Counter(values)
+        best_value, best_count = counts.most_common(1)[0]
         agg[attr] = best_value
-        agg[f"{attr}_confidence"] = round(weighted_counts[best_value] / total_weight, 3) if total_weight else 0.0
+        agg[f"{attr}_confidence"] = round(best_count / len(values), 3)
     return agg
 
 
@@ -535,7 +486,7 @@ def search(
     placeholders = ",".join("?" * len(track_ids))
 
     feature_rows_all = conn.execute(
-        f"""SELECT track_id, crop_path, color_top, color_top_confidence, color_bottom, color_bottom_confidence,
+        f"""SELECT track_id, color_top, color_top_confidence, color_bottom, color_bottom_confidence,
                    sleeve_length, sleeve_length_confidence,
                    has_hat, has_hat_confidence, hairstyle, hairstyle_confidence,
                    has_shoes, has_shoes_confidence
@@ -545,13 +496,12 @@ def search(
     features_by_track: dict[str, list[dict]] = defaultdict(list)
     for r in feature_rows_all:
         features_by_track[r[0]].append({
-            "crop_path": r[1],
-            "color_top": r[2], "color_top_confidence": r[3],
-            "color_bottom": r[4], "color_bottom_confidence": r[5],
-            "sleeve_length": r[6], "sleeve_length_confidence": r[7],
-            "has_hat": r[8], "has_hat_confidence": r[9],
-            "hairstyle": r[10], "hairstyle_confidence": r[11],
-            "has_shoes": r[12], "has_shoes_confidence": r[13],
+            "color_top": r[1], "color_top_confidence": r[2],
+            "color_bottom": r[3], "color_bottom_confidence": r[4],
+            "sleeve_length": r[5], "sleeve_length_confidence": r[6],
+            "has_hat": r[7], "has_hat_confidence": r[8],
+            "hairstyle": r[9], "hairstyle_confidence": r[10],
+            "has_shoes": r[11], "has_shoes_confidence": r[12],
         })
 
     crop_rows_all = conn.execute(
@@ -568,10 +518,8 @@ def search(
 
     best_crop_by_track: dict[str, str] = {}
     best_area_by_track: dict[str, int] = {}
-    area_by_track_crop: dict[tuple[str, str], int] = {}
     for tid, crop_path, w, h in crop_rows_all:
         area = (w or 0) * (h or 0)
-        area_by_track_crop[(tid, crop_path)] = area
         if area > best_area_by_track.get(tid, -1):
             best_area_by_track[tid] = area
             best_crop_by_track[tid] = crop_path
@@ -587,12 +535,7 @@ def search(
         feature_rows = features_by_track.get(track_id)
         if not feature_rows:
             continue
-        # Bỏ phiếu màu/thuộc tính theo TRỌNG SỐ DIỆN TÍCH crop, không phải
-        # đếm đều mỗi crop 1 phiếu — xem docstring _aggregate_rows(): crop
-        # nhỏ/xa camera dễ phân loại màu sai (ngả về "đen"), số lượng đông
-        # nhưng kém tin cậy hơn không nên áp đảo vài crop lớn/rõ.
-        weights = [area_by_track_crop.get((track_id, r["crop_path"]), 1) or 1 for r in feature_rows]
-        track_agg = _aggregate_rows(feature_rows, weights=weights)
+        track_agg = _aggregate_rows(feature_rows)
         attribute_result = _score_against_reference(reference_features, track_agg)
         track_embedding = _mean_pool_normalize(embeddings_by_track.get(track_id, []))
         scored = _combine_with_embedding(attribute_result, ref_embedding, track_embedding)

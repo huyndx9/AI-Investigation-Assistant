@@ -30,47 +30,31 @@ def _hex_to_bgr(hex_color: str) -> tuple[int, int, int]:
     return (b, g, r)
 
 
-ARROW_COLOR_BGR = (255, 160, 40)  # xanh dương nhạt (BGR) — mũi tên cho track KHÔNG phải ứng viên khớp
-
-
 def build_highlighted_video(
     db_path: str,
     source_path: str,
     video_id: str,
-    tracks: list[dict],  # [{"track_id": str, "label": str, "color": "#rrggbb"}, ...] — ứng viên khớp, vẽ KHUNG
+    tracks: list[dict],  # [{"track_id": str, "label": str, "color": "#rrggbb"}, ...]
     output_path: str,
-    arrow_track_ids: list[str] | None = None,  # track ĐÃ được tạo nhưng KHÔNG phải ứng viên khớp — vẽ MŨI TÊN nhỏ trên đầu
 ) -> str:
-    """Vẽ khung (ứng viên khớp) + mũi tên nhỏ (mọi track khác đã được tạo,
-    không phải ứng viên) lên toàn bộ video, xuất ra bản mp4 phát-được-trên-
-    trình-duyệt tại output_path (cache: gọi lại với cùng output_path sẽ bỏ
-    qua nếu file đã tồn tại).
-
-    Mũi tên giúp điều tra viên phân biệt 2 loại "không thấy trong kết quả":
-    (a) người ĐÃ được hệ thống phát hiện/theo dõi nhưng không khớp đủ điểm
-    (có mũi tên, không có khung) — lỗi ở bước so khớp; (b) người hệ thống
-    KHÔNG HỀ phát hiện được (không có gì cả) — lỗi ở bước detect. Trước đây
-    chỉ vẽ khung ứng viên khớp nên 2 trường hợp này không phân biệt được
-    bằng mắt (xem WORKLOG.md)."""
+    """Vẽ khung cho các track trong `tracks` lên toàn bộ video, xuất ra bản
+    mp4 phát-được-trên-trình-duyệt tại output_path (cache: gọi lại với cùng
+    output_path sẽ bỏ qua nếu file đã tồn tại)."""
     if Path(output_path).is_file():
         return output_path
 
     import sqlite3
     conn = sqlite3.connect(db_path)
-    box_track_ids = [t["track_id"] for t in tracks]
-    arrow_track_ids = [tid for tid in (arrow_track_ids or []) if tid not in set(box_track_ids)]
-    all_track_ids = box_track_ids + arrow_track_ids
-    placeholders = ",".join("?" * len(all_track_ids))
+    track_ids = [t["track_id"] for t in tracks]
+    placeholders = ",".join("?" * len(track_ids))
     rows = conn.execute(
         f"""SELECT track_id, frame_number, bbox_x, bbox_y, bbox_w, bbox_h
             FROM track_crops WHERE track_id IN ({placeholders}) ORDER BY frame_number""",
-        all_track_ids,
+        track_ids,
     ).fetchall()
     conn.close()
 
-    style_by_track = {t["track_id"]: ("box", t["label"], _hex_to_bgr(t["color"])) for t in tracks}
-    for tid in arrow_track_ids:
-        style_by_track[tid] = ("arrow", None, ARROW_COLOR_BGR)
+    style_by_track = {t["track_id"]: (t["label"], _hex_to_bgr(t["color"])) for t in tracks}
     last_frame_by_track = {}
     for track_id, frame_number, *_ in rows:
         last_frame_by_track[track_id] = max(last_frame_by_track.get(track_id, -1), frame_number)
@@ -106,16 +90,9 @@ def build_highlighted_video(
             del current_boxes[track_id]
 
         for track_id, (x, y, w, h) in current_boxes.items():
-            kind, label, color = style_by_track[track_id]
-            if kind == "box":
-                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
-                cv2.putText(frame, label, (x, max(0, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2, cv2.LINE_AA)
-            else:
-                # Mũi tên nhỏ trỏ xuống đầu — không che mặt/thân như khung,
-                # đủ để nhận biết "đã có track" mà không nhầm với ứng viên khớp.
-                tip_x, tip_y = x + w // 2, max(0, y - 2)
-                start = (tip_x, max(0, tip_y - 18))
-                cv2.arrowedLine(frame, start, (tip_x, tip_y), color, 2, cv2.LINE_AA, tipLength=0.5)
+            label, color = style_by_track[track_id]
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            cv2.putText(frame, label, (x, max(0, y - 6)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2, cv2.LINE_AA)
 
         writer.write(frame)
 
