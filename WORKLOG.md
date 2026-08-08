@@ -148,6 +148,29 @@ tình hình giữa cả 3 bên, thay cho việc phải nhớ/đoán người kh�
   Không có thay đổi code (chỉ mutate `case.db`, đã gitignore) — không cần
   restart server, đã kiểm tra log không lỗi thật.
 
+## 2026-08-08 10:20 — Claude Code
+- Điều tra báo cáo "kết quả sai" của bạn (case `benchmark_combined`, video
+  `lab4p-c0.avi`, ảnh tham chiếu quần tối màu, kết quả trả về người mặc
+  quần be/kem) — tra audit log tìm đúng track (`5322456d-..._t108`), xác
+  nhận bằng ảnh thật: hệ thống phân loại "màu áo/quần: đen" cho track này
+  dù người đó mặc nâu/be thật. Nguyên nhân: 67/76 crop (đa số nhỏ/xa camera,
+  ít ánh sáng) bị phân loại nhầm "đen", áp đảo phiếu của vài crop lớn/rõ.
+- Đã sửa: `_aggregate_rows()` (`demo_search.py`) giờ bỏ phiếu theo TRỌNG SỐ
+  DIỆN TÍCH crop thay vì đếm đều. `modules/ground_truth.py` cập nhật tương
+  tự để so sánh công bằng. Đo lại trên toàn ground-truth: FPR 33.1%→32.8%,
+  FNR 2.7%→2.3% — cải thiện thật nhưng khiêm tốn (ca này nặng nhưng không
+  phải nguyên nhân chính của FPR cao).
+- **Đã thử và TỪ CHỐI** hạ `BLACK_V_MAX` (ngưỡng đen) để sửa triệt để hơn:
+  phát hiện cả video có thể bị ám màu — 1 track kiểm soát (đồ đen thật)
+  cũng chuyển thành "xanh dương" khi hạ ngưỡng. Sửa đúng cần cân bằng
+  trắng, ngoài phạm vi hiện tại. Đã ghi rõ cả 2 phát hiện vào README mục
+  Giới hạn đã biết (kèm cập nhật audit log + ground-truth đã có, trước đây
+  README còn ghi là "chưa có").
+- Việc lớn vẫn đang treo: đề xuất chỉnh lại `EMBED_SIM_FLOOR/CEIL/
+  MIN_CONFIDENT_SCORE` (floor=0.40 ceil=0.85 threshold=0.58 → FPR≈17.5%,
+  đổi lại FNR≈10%) — đòn bẩy lớn hơn nhiều so với sửa vừa rồi, vẫn đang chờ
+  bạn quyết định đánh đổi.
+
 ## 2026-08-07 00:00 — VS Code AI
 - Đã ghi nhận quy ước làm việc chung và sẽ đọc `WORKLOG.md` trước khi bắt đầu
   bất kỳ việc gì trên project này.
