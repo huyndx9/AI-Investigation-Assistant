@@ -323,25 +323,43 @@ def get_reference_appearance(image_path: str, conf_threshold: float = 0.3, use_v
     return features
 
 
-def _aggregate_rows(rows: list[dict], attrs: list[str] = ALL_ATTRIBUTES) -> dict:
+def _aggregate_rows(rows: list[dict], attrs: list[str] = ALL_ATTRIBUTES, weights: list[float] | None = None) -> dict:
     """Gộp nhiều dòng appearance (1 dòng / crop, hoặc 1 dòng / ảnh tham
     chiếu) thành 1 bộ đặc điểm đại diện — bỏ phiếu đa số cho từng thuộc
     tính, bỏ qua giá trị "không rõ" khi còn giá trị khác để bỏ phiếu (không
     để "không rõ" làm loãng kết quả nếu phần lớn nguồn đã xác định được).
     attrs mặc định là 6 thuộc tính cổ điển; truyền EXTENDED_REFERENCE_ATTRS
     để gộp các thuộc tính mở rộng (túi/balo, loại trang phục...) qua nhiều
-    ảnh tham chiếu theo cùng logic."""
+    ảnh tham chiếu theo cùng logic.
+
+    weights (tuỳ chọn, cùng độ dài với rows): trọng số mỗi dòng khi bỏ phiếu
+    — mặc định None = mỗi dòng 1 phiếu như cũ (dùng khi gộp ảnh tham chiếu,
+    không có khái niệm "diện tích crop"). Khi gộp crop của 1 TRACK, truyền
+    diện tích bbox làm trọng số: đã xác nhận thực tế crop nhỏ/xa camera dễ
+    phân loại màu sai (ít ánh sáng phản chiếu, ngả về "đen") — bỏ phiếu đều
+    tay để crop nhỏ áp đảo số lượng crop lớn/rõ hơn từng gây sai màu áo/quần
+    thật (vd track có 67/76 crop nhỏ báo "đen" trong khi crop lớn, rõ nhất
+    cho thấy màu nâu/be — xem WORKLOG.md)."""
     agg = {}
     for attr in attrs:
-        values = [r[attr] for r in rows if r.get(attr) not in (None,) and r[attr] != "khong_ro"]
-        if not values:
+        if weights is None:
+            pairs = [(r[attr], 1.0) for r in rows if r.get(attr) not in (None,) and r[attr] != "khong_ro"]
+        else:
+            pairs = [
+                (r[attr], w) for r, w in zip(rows, weights)
+                if r.get(attr) not in (None,) and r[attr] != "khong_ro"
+            ]
+        if not pairs:
             agg[attr] = "khong_ro"
             agg[f"{attr}_confidence"] = 0.0
             continue
-        counts = Counter(values)
-        best_value, best_count = counts.most_common(1)[0]
+        weighted_counts: dict = defaultdict(float)
+        for value, w in pairs:
+            weighted_counts[value] += w
+        best_value = max(weighted_counts, key=weighted_counts.get)
+        total_weight = sum(weighted_counts.values())
         agg[attr] = best_value
-        agg[f"{attr}_confidence"] = round(best_count / len(values), 3)
+        agg[f"{attr}_confidence"] = round(weighted_counts[best_value] / total_weight, 3) if total_weight else 0.0
     return agg
 
 
@@ -517,7 +535,7 @@ def search(
     placeholders = ",".join("?" * len(track_ids))
 
     feature_rows_all = conn.execute(
-        f"""SELECT track_id, color_top, color_top_confidence, color_bottom, color_bottom_confidence,
+        f"""SELECT track_id, crop_path, color_top, color_top_confidence, color_bottom, color_bottom_confidence,
                    sleeve_length, sleeve_length_confidence,
                    has_hat, has_hat_confidence, hairstyle, hairstyle_confidence,
                    has_shoes, has_shoes_confidence
@@ -527,12 +545,13 @@ def search(
     features_by_track: dict[str, list[dict]] = defaultdict(list)
     for r in feature_rows_all:
         features_by_track[r[0]].append({
-            "color_top": r[1], "color_top_confidence": r[2],
-            "color_bottom": r[3], "color_bottom_confidence": r[4],
-            "sleeve_length": r[5], "sleeve_length_confidence": r[6],
-            "has_hat": r[7], "has_hat_confidence": r[8],
-            "hairstyle": r[9], "hairstyle_confidence": r[10],
-            "has_shoes": r[11], "has_shoes_confidence": r[12],
+            "crop_path": r[1],
+            "color_top": r[2], "color_top_confidence": r[3],
+            "color_bottom": r[4], "color_bottom_confidence": r[5],
+            "sleeve_length": r[6], "sleeve_length_confidence": r[7],
+            "has_hat": r[8], "has_hat_confidence": r[9],
+            "hairstyle": r[10], "hairstyle_confidence": r[11],
+            "has_shoes": r[12], "has_shoes_confidence": r[13],
         })
 
     crop_rows_all = conn.execute(
@@ -549,8 +568,10 @@ def search(
 
     best_crop_by_track: dict[str, str] = {}
     best_area_by_track: dict[str, int] = {}
+    area_by_track_crop: dict[tuple[str, str], int] = {}
     for tid, crop_path, w, h in crop_rows_all:
         area = (w or 0) * (h or 0)
+        area_by_track_crop[(tid, crop_path)] = area
         if area > best_area_by_track.get(tid, -1):
             best_area_by_track[tid] = area
             best_crop_by_track[tid] = crop_path
@@ -566,7 +587,12 @@ def search(
         feature_rows = features_by_track.get(track_id)
         if not feature_rows:
             continue
-        track_agg = _aggregate_rows(feature_rows)
+        # Bỏ phiếu màu/thuộc tính theo TRỌNG SỐ DIỆN TÍCH crop, không phải
+        # đếm đều mỗi crop 1 phiếu — xem docstring _aggregate_rows(): crop
+        # nhỏ/xa camera dễ phân loại màu sai (ngả về "đen"), số lượng đông
+        # nhưng kém tin cậy hơn không nên áp đảo vài crop lớn/rõ.
+        weights = [area_by_track_crop.get((track_id, r["crop_path"]), 1) or 1 for r in feature_rows]
+        track_agg = _aggregate_rows(feature_rows, weights=weights)
         attribute_result = _score_against_reference(reference_features, track_agg)
         track_embedding = _mean_pool_normalize(embeddings_by_track.get(track_id, []))
         scored = _combine_with_embedding(attribute_result, ref_embedding, track_embedding)

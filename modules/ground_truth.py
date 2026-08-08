@@ -38,6 +38,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent))
+import embedding  # noqa: E402
 from demo_search import (  # noqa: E402
     ATTR_WEIGHT, EMBED_SIM_CEIL, EMBED_SIM_FLOOR, EMBED_WEIGHT,
     _aggregate_rows, _combine_with_embedding, _mean_pool_normalize, _score_against_reference,
@@ -176,13 +177,23 @@ def _get_side_features(db_path: str, side: dict) -> tuple[dict | None, np.ndarra
     conn = sqlite3.connect(db_path)
     placeholders = ",".join("?" * len(crop_paths))
     appearance_rows = conn.execute(
-        f"SELECT {','.join(APPEARANCE_COLS)} FROM features_appearance "
+        f"SELECT crop_path,{','.join(APPEARANCE_COLS)} FROM features_appearance "
         f"WHERE track_id = ? AND crop_path IN ({placeholders})",
         (track_id, *crop_paths),
     ).fetchall()
+    area_by_crop = dict(
+        conn.execute(
+            f"SELECT crop_path, bbox_w * bbox_h FROM track_crops "
+            f"WHERE track_id = ? AND crop_path IN ({placeholders})",
+            (track_id, *crop_paths),
+        ).fetchall()
+    )
     conn.close()
-    appearance_dicts = [dict(zip(APPEARANCE_COLS, r)) for r in appearance_rows]
-    agg = _aggregate_rows(appearance_dicts) if appearance_dicts else None
+    appearance_dicts = [dict(zip(APPEARANCE_COLS, r[1:])) for r in appearance_rows]
+    # Trọng số diện tích -- khớp đúng cách demo_search.search() gộp thuộc
+    # tính production, để so sánh trước/sau công bằng (xem WORKLOG.md).
+    weights = [area_by_crop.get(r[0], 1) or 1 for r in appearance_rows]
+    agg = _aggregate_rows(appearance_dicts, weights=weights) if appearance_dicts else None
     return agg, embedding
 
 
@@ -194,6 +205,79 @@ def score_pair(db_path: str, pair: dict) -> dict | None:
     attribute_result = _score_against_reference(agg_a, agg_b)
     combined = _combine_with_embedding(attribute_result, emb_a, emb_b)
     return {"score": combined["score"], "embed_similarity": combined.get("embed_similarity")}
+
+
+# ---------------------------------------------------------------------------
+# Dò lại ngưỡng (tách tín hiệu thô khỏi bước kết hợp điểm, để quét nhiều tổ
+# hợp floor/ceil/threshold KHÔNG phải tính lại từ DB mỗi lần -- rất chậm)
+# ---------------------------------------------------------------------------
+
+def compute_raw_signals(db_path: str, pairs: list[dict]) -> list[dict]:
+    """Tính 1 LẦN DUY NHẤT attr_score + cosine_sim thô (CHƯA áp
+    floor/ceil/weight) cho mỗi cặp — bước tốn DB, tách khỏi combine_score()
+    (thuần toán học) để quét ngưỡng nhanh."""
+    signals = []
+    for pair in pairs:
+        agg_a, emb_a = _get_side_features(db_path, pair["a"])
+        agg_b, emb_b = _get_side_features(db_path, pair["b"])
+        if agg_a is None or agg_b is None:
+            continue
+        attribute_result = _score_against_reference(agg_a, agg_b)
+        cosine_sim = None
+        if emb_a is not None and emb_b is not None:
+            cosine_sim = embedding.cosine_similarity(emb_a, emb_b)
+        signals.append({"label": pair["label"], "attr_score": attribute_result["score"], "cosine_sim": cosine_sim})
+    return signals
+
+
+def combine_score(attr_score: float, cosine_sim: float | None, embed_floor: float, embed_ceil: float,
+                   embed_weight: float, attr_weight: float) -> float:
+    """Y hệt công thức trong demo_search._combine_with_embedding(), viết lại
+    thuần toán học (không đọc DB) để quét được nhanh."""
+    if cosine_sim is None:
+        return attr_score
+    embed_score = max(0.0, min(1.0, (cosine_sim - embed_floor) / (embed_ceil - embed_floor)))
+    return embed_weight * embed_score + attr_weight * attr_score
+
+
+def sweep_thresholds(
+    signals: list[dict],
+    embed_floor_candidates: list[float],
+    embed_ceil_candidates: list[float],
+    min_confident_candidates: list[float],
+    embed_weight: float = EMBED_WEIGHT,
+    attr_weight: float = ATTR_WEIGHT,
+    max_fnr: float = 0.10,
+) -> tuple[list[dict], dict | None]:
+    """Quét (embed_floor, embed_ceil, min_confident_score) — KHÔNG quét
+    embed_weight/attr_weight trong đợt này (300 cặp 'cùng người' còn ít +
+    suy luận yếu hơn, quét quá nhiều tham số cùng lúc dễ overfit vào tập
+    yếu đó). Chọn cấu hình có false_positive_rate THẤP NHẤT trong số các
+    cấu hình có false_negative_rate <= max_fnr — vì FPR đo trên 2880 cặp
+    đáng tin cậy 100%, còn FNR đo trên tập yếu hơn nên chỉ dùng làm RÀNG
+    BUỘC (không vượt quá), không dùng làm mục tiêu chính để tối ưu."""
+    results = []
+    for floor in embed_floor_candidates:
+        for ceil in embed_ceil_candidates:
+            if ceil <= floor:
+                continue
+            scored = [
+                (s["label"], combine_score(s["attr_score"], s["cosine_sim"], floor, ceil, embed_weight, attr_weight))
+                for s in signals
+            ]
+            same = [sc for lb, sc in scored if lb == "same"]
+            diff = [sc for lb, sc in scored if lb == "different"]
+            for threshold in min_confident_candidates:
+                fpr = (sum(1 for sc in diff if sc >= threshold) / len(diff)) if diff else None
+                fnr = (sum(1 for sc in same if sc < threshold) / len(same)) if same else None
+                results.append({
+                    "embed_floor": floor, "embed_ceil": ceil, "min_confident_score": round(threshold, 3),
+                    "fpr": round(fpr, 4) if fpr is not None else None,
+                    "fnr": round(fnr, 4) if fnr is not None else None,
+                })
+    candidates = [r for r in results if r["fnr"] is not None and r["fnr"] <= max_fnr]
+    best = min(candidates, key=lambda r: r["fpr"]) if candidates else None
+    return results, best
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +328,8 @@ def main() -> None:
     parser.add_argument("--pairs-path", default=DEFAULT_PAIRS_PATH)
     parser.add_argument("--build", action="store_true", help="Sinh cặp mới, ghi ra file (ghi đè).")
     parser.add_argument("--evaluate", action="store_true", help="Đọc file cặp đã có, đánh giá điểm hiện tại.")
+    parser.add_argument("--sweep", action="store_true", help="Dò lại embed_floor/ceil/min_confident_score.")
+    parser.add_argument("--max-fnr", type=float, default=0.10, help="Ràng buộc false_negative_rate khi dò (--sweep).")
     args = parser.parse_args()
 
     if args.build:
@@ -264,7 +350,32 @@ def main() -> None:
         print(f"\n(EMBED_SIM_FLOOR={EMBED_SIM_FLOOR} EMBED_SIM_CEIL={EMBED_SIM_CEIL} "
               f"EMBED_WEIGHT={EMBED_WEIGHT} ATTR_WEIGHT={ATTR_WEIGHT})")
 
-    if not args.build and not args.evaluate:
+    if args.sweep:
+        with open(args.pairs_path, encoding="utf-8") as f:
+            pairs = json.load(f)
+        print(f"Đang tính tín hiệu thô cho {len(pairs)} cặp (chỉ 1 lần)...")
+        signals = compute_raw_signals(args.db_path, pairs)
+        floor_candidates = [round(x, 2) for x in np.arange(0.25, 0.51, 0.05)]
+        ceil_candidates = [round(x, 2) for x in np.arange(0.70, 0.96, 0.05)]
+        threshold_candidates = [round(x, 2) for x in np.arange(0.30, 0.71, 0.02)]
+        results, best = sweep_thresholds(
+            signals, floor_candidates, ceil_candidates, threshold_candidates, max_fnr=args.max_fnr
+        )
+        print(f"Đã quét {len(results)} tổ hợp (floor x ceil x threshold), "
+              f"ràng buộc false_negative_rate <= {args.max_fnr}.")
+        if best is None:
+            print("Không tìm được tổ hợp nào thoả ràng buộc false_negative_rate — thử tăng --max-fnr.")
+        else:
+            print("Tổ hợp tốt nhất (false_positive_rate thấp nhất trong số thoả ràng buộc):")
+            print(json.dumps(best, ensure_ascii=False, indent=2))
+            print(f"\nSo với hiện tại: EMBED_SIM_FLOOR={EMBED_SIM_FLOOR} EMBED_SIM_CEIL={EMBED_SIM_CEIL} "
+                  f"MIN_CONFIDENT_SCORE=0.45")
+        sweep_report_path = str(Path(args.pairs_path).parent / "ground_truth_sweep_report.json")
+        with open(sweep_report_path, "w", encoding="utf-8") as f:
+            json.dump({"best": best, "all_results": results}, f, ensure_ascii=False, indent=2)
+        print(f"Đã ghi toàn bộ kết quả quét -> {sweep_report_path}")
+
+    if not args.build and not args.evaluate and not args.sweep:
         parser.print_help()
 
 
