@@ -52,6 +52,7 @@ from demo_search import (  # noqa: E402
 )
 from highlight_video import build_highlighted_video  # noqa: E402
 import geo_route  # noqa: E402
+import i18n  # noqa: E402
 import vlm_compare  # noqa: E402
 
 DB_PATH = "case.db"
@@ -610,6 +611,57 @@ def on_show_route(case_id, candidates):
 # Giao diện
 # ---------------------------------------------------------------------------
 
+def t(key: str) -> str:
+    """Shorthand for i18n.t(key, i18n.DEFAULT_LANGUAGE) -- initial layout
+    text is built in the default language; apply_language() below handles
+    switching after the page loads."""
+    return i18n.t(key, i18n.DEFAULT_LANGUAGE)
+
+
+def apply_language(lang: str):
+    """Update every STATIC UI-chrome component's label/value/info to the
+    selected language. Deliberately does NOT touch components whose content
+    is generated at request time (case_status, add_video_status, clear_status,
+    search_status, geo_status, player, gallery, evidence_panel, route_map) --
+    those are still built in Vietnamese by app.py/demo_search.py/geo_route.py
+    (see modules/i18n.py docstring) and would immediately overwrite a
+    translated placeholder on the next interaction anyway."""
+    return (
+        gr.update(value=i18n.t("app_header", lang)),
+        gr.update(value=i18n.t("case_section_title", lang)),
+        gr.update(label=i18n.t("case_dropdown_label", lang)),
+        gr.update(label=i18n.t("new_case_name_label", lang), placeholder=i18n.t("new_case_name_placeholder", lang)),
+        gr.update(value=i18n.t("create_case_button", lang)),
+        gr.update(value=i18n.t("add_video_section_title", lang)),
+        gr.update(label=i18n.t("video_files_label", lang)),
+        gr.update(label=i18n.t("camera_label_input_label", lang)),
+        gr.update(label=i18n.t("sample_fps_label", lang)),
+        gr.update(label=i18n.t("clear_accordion_title", lang)),
+        gr.update(value=i18n.t("clear_accordion_markdown", lang)),
+        gr.update(label=i18n.t("clear_confirm_checkbox_label", lang)),
+        gr.update(value=i18n.t("clear_videos_button", lang)),
+        gr.update(value=i18n.t("ref_images_section_title", lang)),
+        gr.update(label=i18n.t("ref_images_label", lang)),
+        gr.update(label=i18n.t("top_k_label", lang), info=i18n.t("top_k_info", lang)),
+        gr.update(label=i18n.t("use_vlm_label", lang), info=i18n.t("use_vlm_info", lang)),
+        gr.update(value=i18n.t("search_button", lang)),
+        gr.update(value=i18n.t("view_video_section_title", lang)),
+        gr.update(label=i18n.t("video_dropdown_label", lang)),
+        gr.update(value=i18n.t("geo_section_title", lang)),
+        gr.update(value=i18n.t("geo_section_markdown", lang)),
+        gr.update(label=i18n.t("geo_address_label", lang), placeholder=i18n.t("geo_address_placeholder", lang),
+                  info=i18n.t("geo_address_info", lang)),
+        gr.update(label=i18n.t("geo_start_time_label", lang)),
+        gr.update(value=i18n.t("geo_save_button", lang)),
+        gr.update(value=i18n.t("candidates_section_title", lang)),
+        gr.update(value=i18n.t("candidates_section_subtitle", lang)),
+        gr.update(value=i18n.t("evidence_section_title", lang)),
+        gr.update(label=i18n.t("route_accordion_title", lang)),
+        gr.update(value=i18n.t("route_accordion_markdown", lang)),
+        gr.update(value=i18n.t("show_route_button", lang)),
+    )
+
+
 with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     candidates_state = gr.State([])
     # gr.Number(visible=False) KHÔNG mount DOM trong Gradio 6 (đã xác nhận
@@ -621,108 +673,100 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         "<style>#aia_gallery_idx{position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none;}</style>"
     )
 
-    gr.Markdown(
-        "# AI Investigation Assistant — Demo\n"
-        "Prototype minh hoạ Module 1 (ingest + track) + Module 2 (appearance). "
-        "**Không phải kết luận danh tính** — chỉ là ứng viên có đặc điểm khớp, "
-        "điều tra viên tự xem xét và quyết định.\n\n"
-        "Đặc điểm dùng để so khớp: màu áo, màu quần, tay áo, mũ, kiểu tóc, giày. "
-        "**Không có giới tính** — suy luận giới tính từ ảnh CCTV không đủ tin cậy để dùng làm bằng chứng."
-    )
+    with gr.Row():
+        language_dropdown = gr.Dropdown(
+            choices=i18n.LANGUAGE_CHOICES, value=i18n.DEFAULT_LANGUAGE,
+            label=i18n.LANGUAGE_SELECTOR_LABEL, scale=0, min_width=220,
+        )
+
+    header_md = gr.Markdown(t("app_header"))
 
     with gr.Row():
         # ---------------- Cột trái: quản lý case ----------------
         with gr.Column(scale=1):
-            gr.Markdown("## Vụ án (Case)")
+            case_section_title_md = gr.Markdown(t("case_section_title"))
             with gr.Row():
-                case_dropdown = gr.Dropdown(choices=_case_choices(DB_PATH), label="Case đang làm việc", scale=4)
+                case_dropdown = gr.Dropdown(choices=_case_choices(DB_PATH), label=t("case_dropdown_label"), scale=4)
                 refresh_cases_btn = gr.Button("🔄", scale=1, min_width=40)
             with gr.Row():
-                new_case_name = gr.Textbox(label="Tên case mới", placeholder="Vd: Vụ mất trộm khu B - 03/08")
-                create_case_btn = gr.Button("Tạo case")
+                new_case_name = gr.Textbox(label=t("new_case_name_label"), placeholder=t("new_case_name_placeholder"))
+                create_case_btn = gr.Button(t("create_case_button"))
             case_status = gr.Markdown("")
 
-            gr.Markdown("### Thêm video vào case")
+            add_video_title_md = gr.Markdown(t("add_video_section_title"))
             video_files_input = gr.File(
-                label="Video (có thể chọn nhiều — nhiều camera/nguồn). Tải lên xong sẽ TỰ ĐỘNG thêm vào case.",
+                label=t("video_files_label"),
                 file_types=["video"], file_count="multiple", type="filepath",
             )
-            camera_label_input = gr.Textbox(label="Nhãn camera (tuỳ chọn, để trống sẽ dùng tên file — đặt trước khi tải video lên nếu muốn dùng)")
-            sample_fps_input = gr.Slider(1, 10, value=2, step=1, label="Tốc độ lấy mẫu (fps)")
+            camera_label_input = gr.Textbox(label=t("camera_label_input_label"))
+            sample_fps_input = gr.Slider(1, 10, value=2, step=1, label=t("sample_fps_label"))
             add_video_status = gr.Markdown("")
 
-            with gr.Accordion("⚠️ Xoá dữ liệu case (không thể hoàn tác)", open=False):
-                gr.Markdown(
-                    "Case demo có thể còn video từ những lần test trước — xoá để "
-                    "chắc chắn case đang chọn thật sự trống trước khi kiểm thử."
-                )
-                clear_confirm_input = gr.Checkbox(
-                    value=False,
-                    label="Tôi hiểu thao tác này xoá vĩnh viễn toàn bộ video, track và "
-                    "đặc điểm đã trích xuất của case đang chọn — không thể hoàn tác.",
-                )
-                clear_videos_btn = gr.Button("🗑️ Xoá tất cả video trong case này", variant="stop")
+            with gr.Accordion(t("clear_accordion_title"), open=False) as clear_accordion:
+                clear_accordion_md = gr.Markdown(t("clear_accordion_markdown"))
+                clear_confirm_input = gr.Checkbox(value=False, label=t("clear_confirm_checkbox_label"))
+                clear_videos_btn = gr.Button(t("clear_videos_button"), variant="stop")
                 clear_status = gr.Markdown("")
 
-            gr.Markdown("### Ảnh tham chiếu (người cần tìm)")
+            ref_images_title_md = gr.Markdown(t("ref_images_section_title"))
             ref_images_input = gr.File(
-                label="Có thể chọn nhiều ảnh (nhiều góc/khoảnh khắc)",
+                label=t("ref_images_label"),
                 file_types=["image"], file_count="multiple", type="filepath",
             )
-            top_k_input = gr.Slider(
-                1, 20, value=5, step=1, label="Số ứng viên hiển thị MỖI VIDEO",
-                info="Áp dụng riêng cho từng video/camera — video nào cũng được xét, không bị video khác chiếm hết chỗ.",
-            )
-            use_vlm_input = gr.Checkbox(
-                value=False,
-                label="🔍 Dùng AI thị giác (ChatGPT Vision)",
-                info="⚠️ Gửi ảnh ra ngoài mạng nội bộ lên API của OpenAI. Bật sẽ: (1) AI mô tả trực tiếp đặc điểm ảnh tham chiếu thay cho thuật toán màu cục bộ (chính xác hơn khi ánh sáng ám màu hoặc tóc dài che vai); (2) AI so sánh lại top ứng viên sau khi tìm kiếm. Cần tự cấu hình OPENAI_API_KEY. Mặc định TẮT.",
-            )
-            search_btn = gr.Button("Tìm kiếm", variant="primary")
+            top_k_input = gr.Slider(1, 20, value=5, step=1, label=t("top_k_label"), info=t("top_k_info"))
+            use_vlm_input = gr.Checkbox(value=False, label=t("use_vlm_label"), info=t("use_vlm_info"))
+            search_btn = gr.Button(t("search_button"), variant="primary")
             search_status = gr.Markdown("")
 
         # ---------------- Cột phải: xem video + kết quả ----------------
         with gr.Column(scale=2):
-            gr.Markdown("## Xem video")
+            view_video_title_md = gr.Markdown(t("view_video_section_title"))
             with gr.Row():
                 with gr.Column(scale=2):
-                    video_dropdown = gr.Dropdown(choices=[], label="Video đang xem")
+                    video_dropdown = gr.Dropdown(choices=[], label=t("video_dropdown_label"))
                     player = gr.HTML(build_player_html("", "", [], None))
                 with gr.Column(scale=1):
-                    gr.Markdown("##### 📍 Vị trí & giờ quay (mở rộng, tuỳ chọn)")
-                    gr.Markdown(
-                        "Áp dụng cho video đang xem bên trái — cần cho mục "
-                        "'🗺️ Lộ trình trên bản đồ' bên dưới. Toạ độ luôn cần tự xác nhận.",
-                    )
+                    geo_title_md = gr.Markdown(t("geo_section_title"))
+                    geo_desc_md = gr.Markdown(t("geo_section_markdown"))
                     geo_address_input = gr.Textbox(
-                        label="Địa chỉ", placeholder="vd Yongin-si, Gyeonggi-do",
-                        info="Toạ độ tự động tìm từ địa chỉ này (OpenStreetMap) khi bấm Lưu.",
+                        label=t("geo_address_label"), placeholder=t("geo_address_placeholder"),
+                        info=t("geo_address_info"),
                     )
                     geo_start_time_input = gr.Textbox(
-                        label="Giờ bắt đầu quay thực", placeholder="YYYY-MM-DD HH:MM:SS"
+                        label=t("geo_start_time_label"), placeholder="YYYY-MM-DD HH:MM:SS"
                     )
-                    geo_save_btn = gr.Button("Lưu vị trí & giờ quay", size="sm")
+                    geo_save_btn = gr.Button(t("geo_save_button"), size="sm")
                     geo_status = gr.Markdown("")
 
-            gr.Markdown("## Ứng viên phù hợp")
-            gr.Markdown("*Nhóm theo video/camera — bấm vào 1 ảnh để xem trên video.*")
+            candidates_title_md = gr.Markdown(t("candidates_section_title"))
+            candidates_subtitle_md = gr.Markdown(t("candidates_section_subtitle"))
             gallery = gr.HTML("*Chưa có kết quả.*")
             gallery_click_index = gr.Number(value=-1, elem_id="aia_gallery_idx")
 
-            gr.Markdown("## Chi tiết bằng chứng (Evidence)")
+            evidence_title_md = gr.Markdown(t("evidence_section_title"))
             evidence_panel = gr.Markdown("*Chọn 1 ứng viên trong danh sách bên trên để xem chi tiết.*")
 
-            with gr.Accordion("🗺️ Lộ trình trên bản đồ (mở rộng, tuỳ chọn)", open=False):
-                gr.Markdown(
-                    "Nối các ứng viên đủ tiêu chuẩn theo GIỜ QUAY THỰC TẾ của từng camera — cần thiết "
-                    "lập vị trí & giờ quay ở mục '📍' cạnh video bên trên trước. Chỉ là gợi ý thứ tự "
-                    "khả dĩ dựa trên điểm khớp, **không phải kết luận lộ trình chắc chắn**."
-                )
-                show_route_btn = gr.Button("Xem lộ trình")
+            with gr.Accordion(t("route_accordion_title"), open=False) as route_accordion:
+                route_desc_md = gr.Markdown(t("route_accordion_markdown"))
+                show_route_btn = gr.Button(t("show_route_button"))
                 route_map = gr.HTML("*Chưa xem lộ trình.*")
 
     # ------------- wiring -------------
     geo_field_outputs = [geo_address_input, geo_start_time_input, geo_status]
+
+    language_dropdown.change(
+        apply_language,
+        inputs=[language_dropdown],
+        outputs=[
+            header_md, case_section_title_md, case_dropdown, new_case_name, create_case_btn,
+            add_video_title_md, video_files_input, camera_label_input, sample_fps_input,
+            clear_accordion, clear_accordion_md, clear_confirm_input, clear_videos_btn,
+            ref_images_title_md, ref_images_input, top_k_input, use_vlm_input, search_btn,
+            view_video_title_md, video_dropdown, geo_title_md, geo_desc_md, geo_address_input,
+            geo_start_time_input, geo_save_btn, candidates_title_md, candidates_subtitle_md,
+            evidence_title_md, route_accordion, route_desc_md, show_route_btn,
+        ],
+    )
 
     create_case_btn.click(
         on_create_case, inputs=[new_case_name], outputs=[case_dropdown, new_case_name, case_status]

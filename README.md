@@ -7,7 +7,7 @@ Công cụ hỗ trợ điều tra viên tìm kiếm 1 người qua nhiều video
 ## Động lực
 
 Dự án này bắt đầu sau khi tác giả đọc được [bản tin về 1 vụ án](https://www.yonhapnewstv.co.kr/news/AKR202608030945281Z0) mà đến nay kẻ gây án vẫn chưa bị bắt và chịu trách nhiệm trước pháp luật. Cảm giác phẫn nộ trước việc đó là lý do trực tiếp thôi thúc xây dựng công cụ này — với hy vọng rút ngắn thời gian điều tra viên phải bỏ ra để rà soát hàng giờ camera giám sát, tăng khả năng lần ra manh mối trong các vụ án tương tự.
-![alt text](image.png)
+
 Đây cũng chính là lý do các nguyên tắc **Human in the Loop / Không kết luận danh tính** được đặt làm ưu tiên xuyên suốt — công cụ chỉ nhằm hỗ trợ điều tra viên tìm đúng người nhanh hơn, không thay thế quy trình điều tra và xét xử đúng pháp luật.
 
 ## Đây KHÔNG PHẢI là gì
@@ -16,7 +16,7 @@ Dự án này bắt đầu sau khi tác giả đọc được [bản tin về 1 
 - **Không kết luận danh tính.** Mọi kết quả là "ứng viên có đặc điểm khớp", kèm điểm số + giải thích — điều tra viên tự xem lại bằng chứng (video, ảnh crop) và tự quyết định.
 - **Không suy luận giới tính, tuổi tác, chủng tộc** — chủ động loại bỏ khỏi thiết kế vì CCTV độ phân giải thấp không đủ tin cậy cho việc này, và suy luận sai dễ khiến điều tra viên loại nhầm đúng người.
 
-Ba nguyên tắc trên xuyên suốt toàn bộ pipeline — xem thêm `PRD_AI_Investigation_Assistant_v0.1.md`.
+Ba nguyên tắc trên xuyên suốt toàn bộ pipeline — xem thêm [`docs/PRD_AI_Investigation_Assistant_v0.1.md`](docs/PRD_AI_Investigation_Assistant_v0.1.md).
 
 ## Tính năng chính
 
@@ -87,4 +87,4 @@ Mở `http://localhost:7860`.
 
 ## Trạng thái dự án
 
-Prototype minh hoạ Module 1 (ingest + track) + Module 2 (appearance) + các mở rộng thử nghiệm (ReID, AI thị giác, bản đồ). Chưa phải giao diện Phase 1 MVP đầy đủ theo `PRD_AI_Investigation_Assistant_v0.1.md` (thiếu audit log, thiết kế Evidence Fusion chính thức do AI Reasoning team sở hữu).
+Prototype minh hoạ Module 1 (ingest + track) + Module 2 (appearance) + các mở rộng thử nghiệm (ReID, AI thị giác, bản đồ). Chưa phải giao diện Phase 1 MVP đầy đủ theo [`docs/PRD_AI_Investigation_Assistant_v0.1.md`](docs/PRD_AI_Investigation_Assistant_v0.1.md) (thiếu audit log, thiết kế Evidence Fusion chính thức do AI Reasoning team sở hữu).
