@@ -36,10 +36,11 @@ import numpy as np
 from ultralytics import YOLO
 
 sys.path.insert(0, str(Path(__file__).parent))
-from appearance import COLOR_NAMES_VI, extract_appearance, process_case  # noqa: E402
+from appearance import extract_appearance, process_case  # noqa: E402
 from pipeline_ingest import DEFAULT_DETECTOR_MODEL, DEFAULT_DEVICE, ensure_case, ingest_video, init_db  # noqa: E402
 from video_transcode import ensure_web_video  # noqa: E402
 import embedding  # noqa: E402
+import i18n  # noqa: E402
 import vlm_compare  # noqa: E402
 
 ATTRIBUTE_WEIGHTS = {
@@ -227,7 +228,9 @@ def clear_case_videos(db_path: str, case_id: str, output_dir: str = "output") ->
     return n_videos
 
 
-def get_reference_appearance(image_path: str, conf_threshold: float = 0.3, use_vlm: bool = False) -> dict | None:
+def get_reference_appearance(
+    image_path: str, conf_threshold: float = 0.3, use_vlm: bool = False, lang: str = i18n.DEFAULT_LANGUAGE,
+) -> dict | None:
     """Phát hiện người trong ảnh tham chiếu (chọn detection tin cậy nhất nếu
     có nhiều người), trích đặc điểm ngoại hình giống hệt cách làm với crop
     trong video — đảm bảo so sánh cùng loại dữ liệu.
@@ -281,7 +284,7 @@ def get_reference_appearance(image_path: str, conf_threshold: float = 0.3, use_v
                 features["_gait_note"] = vlm_result["gait_note"]
         except Exception as e:
             features = extract_appearance(crop, mask)
-            vlm_note = f"⚠️ Lỗi AI thị giác khi mô tả ảnh tham chiếu, dùng heuristic màu cục bộ: {e}"
+            vlm_note = i18n.t("ref_vlm_describe_error_template", lang).format(error=e)
     else:
         features = extract_appearance(crop, mask)
 
@@ -336,7 +339,7 @@ def _aggregate_embeddings(rows: list[dict]) -> np.ndarray | None:
 
 
 def get_reference_appearance_multi(
-    image_paths: list[str], conf_threshold: float = 0.3, use_vlm: bool = False
+    image_paths: list[str], conf_threshold: float = 0.3, use_vlm: bool = False, lang: str = i18n.DEFAULT_LANGUAGE,
 ) -> dict | None:
     """Trích đặc điểm tham chiếu từ NHIỀU ảnh (nhiều góc/khoảnh khắc của cùng
     một người) rồi gộp bằng bỏ phiếu đa số — mô tả đối tượng đầy đủ hơn 1 ảnh
@@ -347,7 +350,7 @@ def get_reference_appearance_multi(
     build_notes = []
     gait_notes = []
     for path in image_paths:
-        features = get_reference_appearance(path, conf_threshold, use_vlm=use_vlm)
+        features = get_reference_appearance(path, conf_threshold, use_vlm=use_vlm, lang=lang)
         if features is None:
             continue
         if sample_crop is None:
@@ -380,17 +383,18 @@ def get_reference_appearance_multi(
     return agg
 
 
-def _score_against_reference(ref: dict, track_agg: dict) -> dict:
+def _score_against_reference(ref: dict, track_agg: dict, lang: str = i18n.DEFAULT_LANGUAGE) -> dict:
     total_weight_used = 0.0
     weighted_sum = 0.0
     confidence_weighted_sum = 0.0
     explanation = []
 
     for attr, weight in ATTRIBUTE_WEIGHTS.items():
+        attr_label = i18n.t(i18n.ATTR_LABEL_KEYS[attr], lang)
         ref_val = ref.get(attr)
         track_val = track_agg.get(attr)
         if ref_val in UNKNOWN_VALUES or track_val in UNKNOWN_VALUES:
-            explanation.append(f"{attr}: bỏ qua (không đủ dữ liệu ở 1 trong 2 bên)")
+            explanation.append(i18n.t("expl_skip_template", lang).format(attr=attr_label))
             continue
         match = 1.0 if ref_val == track_val else 0.0
         contrib = weight * match
@@ -400,12 +404,15 @@ def _score_against_reference(ref: dict, track_agg: dict) -> dict:
             ref_conf = ref.get(f"{attr}_confidence", 0.5) or 0.5
             track_conf = track_agg.get(f"{attr}_confidence", 0.5) or 0.5
             confidence_weighted_sum += weight * ref_conf * track_conf
-        explanation.append(
-            f"{attr}: ảnh={ref_val} vs track={track_val} -> {'khớp' if match else 'khác'} (trọng số {weight})"
-        )
+        value_table = i18n.ATTR_VALUE_TABLES[attr]
+        result_label = i18n.t("match_khop", lang) if match else i18n.t("match_khac", lang)
+        explanation.append(i18n.t("expl_compare_template", lang).format(
+            attr=attr_label, ref=i18n.value(value_table, ref_val, lang), track=i18n.value(value_table, track_val, lang),
+            result=result_label, weight=weight,
+        ))
 
     if total_weight_used == 0:
-        return {"score": 0.0, "explanation": explanation + ["Không đủ đặc điểm chung để so sánh."]}
+        return {"score": 0.0, "explanation": explanation + [i18n.t("expl_no_common_attrs", lang)]}
 
     score = weighted_sum / total_weight_used
     # Phạt nhẹ nếu chỉ so được ít thuộc tính (độ tin cậy tổng thể thấp hơn)
@@ -430,7 +437,8 @@ def _score_against_reference(ref: dict, track_agg: dict) -> dict:
 
 
 def _combine_with_embedding(
-    attribute_result: dict, ref_embedding: np.ndarray | None, track_embedding: np.ndarray | None
+    attribute_result: dict, ref_embedding: np.ndarray | None, track_embedding: np.ndarray | None,
+    lang: str = i18n.DEFAULT_LANGUAGE,
 ) -> dict:
     """Kết hợp điểm thuộc tính (attribute_result["score"]) với điểm tương
     đồng ReID thành điểm cuối. Nếu thiếu embedding ở 1 trong 2 bên (case cũ
@@ -440,18 +448,15 @@ def _combine_with_embedding(
     attr_score = attribute_result["score"]
 
     if ref_embedding is None or track_embedding is None:
-        explanation.append(
-            "Đặc điểm ngoại hình (ReID): chưa có dữ liệu embedding, dùng riêng điểm thuộc tính."
-        )
+        explanation.append(i18n.t("expl_reid_no_data", lang))
         return {"score": attr_score, "explanation": explanation, "embed_similarity": None}
 
     cosine_sim = embedding.cosine_similarity(ref_embedding, track_embedding)
     embed_score = max(0.0, min(1.0, (cosine_sim - EMBED_SIM_FLOOR) / (EMBED_SIM_CEIL - EMBED_SIM_FLOOR)))
     final_score = EMBED_WEIGHT * embed_score + ATTR_WEIGHT * attr_score
-    explanation.append(
-        f"Đặc điểm ngoại hình (ReID): tương đồng {cosine_sim:.2f} -> điểm {embed_score:.2f} "
-        f"(trọng số {EMBED_WEIGHT}) — điểm thuộc tính {attr_score:.2f} (trọng số {ATTR_WEIGHT})"
-    )
+    explanation.append(i18n.t("expl_reid_template", lang).format(
+        sim=cosine_sim, score=embed_score, embed_w=EMBED_WEIGHT, attr=attr_score, attr_w=ATTR_WEIGHT,
+    ))
     return {"score": round(final_score, 4), "explanation": explanation, "embed_similarity": cosine_sim}
 
 
@@ -460,6 +465,7 @@ def search(
     db_path: str,
     reference_features: dict,
     top_k: int = 5,
+    lang: str = i18n.DEFAULT_LANGUAGE,
 ) -> list[dict]:
     """So khớp reference_features với mọi track trong TOÀN BỘ video của case
     (không phải 1 video đơn lẻ) — mỗi ứng viên trả kèm video_id/video_label
@@ -536,9 +542,9 @@ def search(
         if not feature_rows:
             continue
         track_agg = _aggregate_rows(feature_rows)
-        attribute_result = _score_against_reference(reference_features, track_agg)
+        attribute_result = _score_against_reference(reference_features, track_agg, lang=lang)
         track_embedding = _mean_pool_normalize(embeddings_by_track.get(track_id, []))
-        scored = _combine_with_embedding(attribute_result, ref_embedding, track_embedding)
+        scored = _combine_with_embedding(attribute_result, ref_embedding, track_embedding, lang=lang)
         video_fps = fps or 25.0
 
         candidates.append({

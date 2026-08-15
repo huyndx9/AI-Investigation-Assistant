@@ -42,9 +42,6 @@ def _load_dotenv(path: str = ".env") -> None:
 _load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent / "modules"))
-from appearance import (  # noqa: E402
-    COLOR_NAMES_VI, HAIRSTYLE_NAMES_VI, HAT_NAMES_VI, SHOES_NAMES_VI, SLEEVE_NAMES_VI,
-)
 from demo_search import (  # noqa: E402
     MIN_CONFIDENT_SCORE, VLM_POOL_PER_VIDEO, add_video_to_case, clear_case_videos, create_case,
     filter_prescreen_for_vlm, get_reference_appearance_multi, get_web_video_path, group_top_k_per_video,
@@ -64,17 +61,17 @@ MARKER_COLORS = ["#ff5252", "#4caf50", "#2196f3", "#ffc107", "#e040fb", "#00bcd4
 # Trợ giúp hiển thị
 # ---------------------------------------------------------------------------
 
-def _describe(features: dict) -> str:
-    top = COLOR_NAMES_VI.get(features.get("color_top"), features.get("color_top"))
-    bottom = COLOR_NAMES_VI.get(features.get("color_bottom"), features.get("color_bottom"))
-    sleeve = SLEEVE_NAMES_VI.get(features.get("sleeve_length"), features.get("sleeve_length"))
-    hat = HAT_NAMES_VI.get(features.get("has_hat"), features.get("has_hat"))
-    hair = HAIRSTYLE_NAMES_VI.get(features.get("hairstyle"), features.get("hairstyle"))
-    shoes = SHOES_NAMES_VI.get(features.get("has_shoes"), features.get("has_shoes"))
-    return f"áo {top}, quần {bottom}, tay áo {sleeve}, {hat}, {hair}, {shoes}"
+def _describe(features: dict, lang: str = i18n.DEFAULT_LANGUAGE) -> str:
+    top = i18n.value(i18n.COLOR_VALUES, features.get("color_top"), lang)
+    bottom = i18n.value(i18n.COLOR_VALUES, features.get("color_bottom"), lang)
+    sleeve = i18n.value(i18n.SLEEVE_VALUES, features.get("sleeve_length"), lang)
+    hat = i18n.value(i18n.HAT_VALUES, features.get("has_hat"), lang)
+    hair = i18n.value(i18n.HAIRSTYLE_VALUES, features.get("hairstyle"), lang)
+    shoes = i18n.value(i18n.SHOES_VALUES, features.get("has_shoes"), lang)
+    return i18n.t("ref_desc_template", lang).format(top=top, bottom=bottom, sleeve=sleeve, hat=hat, hair=hair, shoes=shoes)
 
 
-def _describe_videos_with_matches(candidates: list[dict]) -> dict:
+def _describe_videos_with_matches(candidates: list[dict], lang: str = i18n.DEFAULT_LANGUAGE) -> dict:
     """Tóm tắt danh sách video có ít nhất 1 ứng viên đủ tiêu chuẩn — mục "1"
     trong 2 phần kết quả (video nào có đối tượng xuất hiện). Tách riêng khỏi
     danh sách ứng viên chi tiết (mục "2") vì điều tra viên cần biết ngay CÓ
@@ -87,8 +84,9 @@ def _describe_videos_with_matches(candidates: list[dict]) -> dict:
         for label, items in by_video.items()
     ]
     rows.sort(key=lambda r: r[2], reverse=True)
-    text = "\n".join(f"- {label} — {n} lần xuất hiện, điểm cao nhất {best:.2f}" for label, n, best in rows)
-    return {"n_videos": len(rows), "text": text or "(không có)"}
+    row_template = i18n.t("search_video_match_row_template", lang)
+    text = "\n".join(row_template.format(label=label, n=n, best=best) for label, n, best in rows)
+    return {"n_videos": len(rows), "text": text or i18n.t("search_no_videos", lang)}
 
 
 def _case_label(c: dict) -> str:
@@ -159,11 +157,14 @@ def build_player_html(
         left_pct = (c["first_seen_sec"] / duration * 100) if duration else 0
         width_pct = max(0.8, (c["last_seen_sec"] - c["first_seen_sec"]) / duration * 100) if duration else 0.8
         border = "border:2px solid #fff;" if c["track_id"] == highlight_track_id else ""
+        tooltip = i18n.t("player_marker_tooltip_template", lang).format(
+            track=c["track_id"].split("_")[-1], score=f"{c['score']:.2f}",
+            start=c["first_seen_sec"], end=c["last_seen_sec"],
+        )
         marker_divs.append(
             f'<div style="position:absolute;left:{left_pct:.2f}%;width:{width_pct:.2f}%;top:0;bottom:0;'
             f'background:{color};cursor:pointer;border-radius:2px;{border}" '
-            f'title="track {c["track_id"].split(chr(95))[-1]} — điểm {c["score"]:.2f} — '
-            f'giây {c["first_seen_sec"]}-{c["last_seen_sec"]}" '
+            f'title="{tooltip}" '
             f"onclick=\"var v=document.getElementById('aia_player'); "
             f"v.currentTime={c['first_seen_sec']}; v.play();\"></div>"
         )
@@ -277,24 +278,32 @@ def build_evidence_panel(candidate: dict | None, lang: str = i18n.DEFAULT_LANGUA
 
     a = candidate["track_appearance"]
 
-    def row(label: str, value: str, conf_key: str) -> str:
+    def row(label_key: str, value_code: str, table: dict, conf_key: str) -> str:
         conf = a.get(conf_key, 0.0)
-        return f"| {label} | {value} | {conf:.0%} |"
+        label = i18n.t(label_key, lang)
+        val = i18n.value(table, value_code, lang)
+        return f"| {label} | {val} | {conf:.0%} |"
 
     lines = [
-        f"### Track `{candidate['track_id'].split('_')[-1]}` — camera {candidate['video_label']} — điểm khớp {candidate['score']:.2f}",
-        f"Xuất hiện: giây **{candidate['first_seen_sec']}** đến **{candidate['last_seen_sec']}**",
+        i18n.t("evidence_header_template", lang).format(
+            track=candidate["track_id"].split("_")[-1], camera=candidate["video_label"],
+            score=f"{candidate['score']:.2f}",
+        ),
+        i18n.t("evidence_seen_template", lang).format(
+            start=candidate["first_seen_sec"], end=candidate["last_seen_sec"],
+        ),
         "",
-        "| Đặc điểm | Giá trị | Độ tin cậy |",
+        f"| {i18n.t('evidence_col_attribute', lang)} | {i18n.t('evidence_col_value', lang)} | "
+        f"{i18n.t('evidence_col_confidence', lang)} |",
         "|---|---|---|",
-        row("Màu áo", COLOR_NAMES_VI.get(a.get("color_top"), "?"), "color_top_confidence"),
-        row("Màu quần", COLOR_NAMES_VI.get(a.get("color_bottom"), "?"), "color_bottom_confidence"),
-        row("Tay áo", SLEEVE_NAMES_VI.get(a.get("sleeve_length"), "?"), "sleeve_length_confidence"),
-        row("Mũ", HAT_NAMES_VI.get(a.get("has_hat"), "?"), "has_hat_confidence"),
-        row("Tóc", HAIRSTYLE_NAMES_VI.get(a.get("hairstyle"), "?"), "hairstyle_confidence"),
-        row("Giày", SHOES_NAMES_VI.get(a.get("has_shoes"), "?"), "has_shoes_confidence"),
+        row("attr_color_top", a.get("color_top"), i18n.COLOR_VALUES, "color_top_confidence"),
+        row("attr_color_bottom", a.get("color_bottom"), i18n.COLOR_VALUES, "color_bottom_confidence"),
+        row("attr_sleeve", a.get("sleeve_length"), i18n.SLEEVE_VALUES, "sleeve_length_confidence"),
+        row("attr_hat", a.get("has_hat"), i18n.HAT_VALUES, "has_hat_confidence"),
+        row("attr_hair", a.get("hairstyle"), i18n.HAIRSTYLE_VALUES, "hairstyle_confidence"),
+        row("attr_shoes", a.get("has_shoes"), i18n.SHOES_VALUES, "has_shoes_confidence"),
         "",
-        "**Lý do điểm số:**",
+        i18n.t("evidence_score_reason_title", lang),
     ]
     for e in candidate["explanation"]:
         lines.append(f"- {e}")
@@ -303,25 +312,28 @@ def build_evidence_panel(candidate: dict | None, lang: str = i18n.DEFAULT_LANGUA
     if verdict:
         lines.append("")
         lines.append("---")
-        lines.append("**🔍 Đánh giá bằng AI thị giác (đã gửi ảnh crop ra ngoài qua OpenAI API):**")
-        same = "Có khả năng CÙNG người" if verdict.get("same_person_likely") else "Có khả năng KHÁC người"
-        conf_vi = {"cao": "cao", "trung_binh": "trung bình", "thap": "thấp"}.get(verdict.get("confidence"), "?")
-        lines.append(f"- Kết luận: **{same}** — độ tin cậy: **{conf_vi}**")
-        lines.append(f"- Lý do: {verdict.get('reasoning', '(không có)')}")
+        lines.append(i18n.t("evidence_vlm_title", lang))
+        same = i18n.t("vlm_same_person", lang) if verdict.get("same_person_likely") else i18n.t("vlm_diff_person", lang)
+        conf_label = i18n.t(f"vlm_confidence_{verdict.get('confidence')}", lang) if verdict.get("confidence") else "?"
+        lines.append(i18n.t("evidence_verdict_template", lang).format(same=same, confidence=conf_label))
+        reasoning = verdict.get("reasoning") or i18n.t("evidence_reasoning_none", lang)
+        lines.append(f"{i18n.t('evidence_reasoning_prefix', lang)} {reasoning}")
         bag_m = verdict.get("bag_match")
         if bag_m:
-            lines.append(f"- Túi/balo: {vlm_compare.MATCH_NAMES_VI.get(bag_m, bag_m)}")
+            lines.append(f"{i18n.t('evidence_bag_prefix', lang)} {i18n.t(f'match_{bag_m}', lang)}")
         cloth_m = verdict.get("clothing_type_match")
         if cloth_m:
-            lines.append(f"- Loại trang phục & hoạ tiết: {vlm_compare.MATCH_NAMES_VI.get(cloth_m, cloth_m)}")
+            lines.append(f"{i18n.t('evidence_clothing_prefix', lang)} {i18n.t(f'match_{cloth_m}', lang)}")
         acc_m = verdict.get("accessories_match")
         if acc_m:
-            lines.append(f"- Phụ kiện (kính/khẩu trang/đồ cầm tay): {vlm_compare.MATCH_NAMES_VI.get(acc_m, acc_m)}")
+            lines.append(f"{i18n.t('evidence_accessories_prefix', lang)} {i18n.t(f'match_{acc_m}', lang)}")
         bg_note = verdict.get("build_gait_note")
         if bg_note:
-            lines.append(f"- Vóc dáng/dáng đi (chỉ tham khảo): {bg_note}")
+            lines.append(f"{i18n.t('evidence_build_gait_prefix', lang)} {bg_note}")
         if "local_score" in candidate:
-            lines.append(f"- Điểm màu sắc (local): {candidate['local_score']:.2f} → điểm kết hợp: {candidate['score']:.2f}")
+            lines.append(i18n.t("evidence_color_score_template", lang).format(
+                local=candidate["local_score"], combined=candidate["score"],
+            ))
 
     return "\n".join(lines)
 
@@ -330,12 +342,12 @@ def build_evidence_panel(candidate: dict | None, lang: str = i18n.DEFAULT_LANGUA
 # Case management callbacks
 # ---------------------------------------------------------------------------
 
-def on_create_case(case_name):
+def on_create_case(case_name, lang=i18n.DEFAULT_LANGUAGE):
     if not case_name or not case_name.strip():
-        return gr.update(), gr.update(), "⚠️ Nhập tên case trước."
+        return gr.update(), gr.update(), i18n.t("case_err_no_name", lang)
     case_id = create_case(DB_PATH, case_name.strip())
     choices = _case_choices(DB_PATH)
-    return gr.update(choices=choices, value=case_id), "", f"✅ Đã tạo case: {case_name}"
+    return gr.update(choices=choices, value=case_id), "", i18n.t("case_created_template", lang).format(name=case_name)
 
 
 def on_refresh_cases():
@@ -345,13 +357,14 @@ def on_refresh_cases():
 
 def on_add_videos(case_id, video_files, camera_label, sample_fps, lang=i18n.DEFAULT_LANGUAGE, progress=gr.Progress()):
     if not case_id:
-        return gr.update(), "⚠️ Chọn hoặc tạo case trước.", gr.update(), gr.update(), "", "", ""
+        return gr.update(), i18n.t("search_err_no_case", lang), gr.update(), gr.update(), "", "", ""
     if not video_files:
-        return gr.update(), "⚠️ Chọn ít nhất 1 file video.", gr.update(), gr.update(), "", "", ""
+        return gr.update(), i18n.t("add_video_err_no_files", lang), gr.update(), gr.update(), "", "", ""
 
     files = video_files if isinstance(video_files, list) else [video_files]
+    progress_template = i18n.t("add_video_progress_template", lang)
     for i, f in enumerate(files):
-        progress((i + 1) / len(files), desc=f"Đang xử lý video {i + 1}/{len(files)}...")
+        progress((i + 1) / len(files), desc=progress_template.format(i=i + 1, n=len(files)))
         label = camera_label.strip() if camera_label and camera_label.strip() else None
         add_video_to_case(DB_PATH, case_id, f, camera_label=label, sample_fps=sample_fps)
 
@@ -369,11 +382,11 @@ def on_add_videos(case_id, video_files, camera_label, sample_fps, lang=i18n.DEFA
         if new_video_id else i18n.t("clear_no_video_placeholder", lang)
     )
     geo_addr, geo_start, geo_stat = (
-        on_geo_video_selected(case_id, new_video_id) if new_video_id else ("", "", "")
+        on_geo_video_selected(case_id, new_video_id, lang) if new_video_id else ("", "", "")
     )
     return (
         gr.update(choices=video_choices, value=new_video_id),
-        f"✅ Đã thêm {len(files)} video. Case hiện có {n} video.",
+        i18n.t("add_video_success_template", lang).format(count=len(files), total=n),
         gr.update(choices=_case_choices(DB_PATH), value=case_id),
         player_html,
         geo_addr, geo_start, geo_stat,
@@ -388,7 +401,7 @@ def on_case_selected(case_id, lang=i18n.DEFAULT_LANGUAGE):
         if new_video_id else i18n.t("clear_no_video_placeholder", lang)
     )
     geo_addr, geo_start, geo_stat = (
-        on_geo_video_selected(case_id, new_video_id) if new_video_id else ("", "", "")
+        on_geo_video_selected(case_id, new_video_id, lang) if new_video_id else ("", "", "")
     )
     return (
         gr.update(choices=video_choices, value=new_video_id),
@@ -408,12 +421,12 @@ def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
     no_results = i18n.t("candidates_no_results", lang)
     if not case_id:
         return (
-            gr.update(), gr.update(), "⚠️ Chọn case trước.", gr.update(), None, no_results, "",
+            gr.update(), gr.update(), i18n.t("clear_err_no_case", lang), gr.update(), None, no_results, "",
             no_results, False, "", "", "",
         )
     if not confirmed:
         return (
-            gr.update(), gr.update(), "⚠️ Vui lòng tick xác nhận trước khi xoá.",
+            gr.update(), gr.update(), i18n.t("clear_err_not_confirmed", lang),
             gr.update(), None, no_results, "", no_results, False, "", "", "",
         )
 
@@ -422,7 +435,7 @@ def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
     return (
         gr.update(choices=[], value=None),  # video_dropdown
         gr.update(choices=_case_choices(DB_PATH), value=case_id),  # case_dropdown
-        f"✅ Đã xoá {n} video khỏi case. Case hiện trống, sẵn sàng thêm video mới.",  # clear_status
+        i18n.t("clear_success_template", lang).format(n=n),  # clear_status
         player_html,  # player
         None, no_results, "", no_results,  # candidates_state, gallery, search_status, evidence_panel
         False,  # clear_confirm_input (tự bỏ tick sau khi xoá xong)
@@ -437,25 +450,25 @@ def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
 def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGUAGE, progress=gr.Progress()):
     no_results = i18n.t("candidates_no_results", lang)
     if not case_id:
-        return None, no_results, "⚠️ Chọn hoặc tạo case trước.", gr.update(), no_results, gr.update()
+        return None, no_results, i18n.t("search_err_no_case", lang), gr.update(), no_results, gr.update()
     if not ref_image_paths:
-        return None, no_results, "⚠️ Vui lòng chọn ít nhất 1 ảnh tham chiếu.", gr.update(), no_results, gr.update()
+        return None, no_results, i18n.t("search_err_no_ref_images", lang), gr.update(), no_results, gr.update()
     if use_vlm and not vlm_compare.is_configured():
-        return None, no_results, f"⚠️ {vlm_compare.get_setup_instructions()}", gr.update(), no_results, gr.update()
+        return None, no_results, f"⚠️ {vlm_compare.get_setup_instructions(lang)}", gr.update(), no_results, gr.update()
 
-    progress(0.1, desc=f"Đang trích đặc điểm từ {len(ref_image_paths)} ảnh tham chiếu...")
-    ref_features = get_reference_appearance_multi(ref_image_paths, use_vlm=use_vlm)
+    progress(0.1, desc=i18n.t("search_progress_extract", lang).format(n=len(ref_image_paths)))
+    ref_features = get_reference_appearance_multi(ref_image_paths, use_vlm=use_vlm, lang=lang)
     if ref_features is None:
-        return None, no_results, "❌ Không phát hiện được người trong ảnh tham chiếu nào.", gr.update(), no_results, gr.update()
+        return None, no_results, i18n.t("search_err_no_person_detected", lang), gr.update(), no_results, gr.update()
 
-    progress(0.5, desc="Đang so khớp với các ứng viên trong toàn bộ case...")
+    progress(0.5, desc=i18n.t("search_progress_match", lang))
     # Khi bật AI thị giác, lấy 1 tập ứng viên RỘNG HƠN "Số ứng viên hiển thị"
     # MỖI VIDEO để gửi cho AI xem xét — tránh cắt mất ứng viên đúng chỉ vì
     # điểm so màu/ReID cục bộ (heuristic thô) xếp nó ngoài top-K nhỏ trước
     # khi AI kịp thấy (xem VLM_POOL_PER_VIDEO trong demo_search.py). Tính
     # theo TỪNG VIDEO (không phải tổng case) để mọi video được xét công bằng.
     search_top_k = max(int(top_k), VLM_POOL_PER_VIDEO) if use_vlm else int(top_k)
-    candidates = search(case_id, DB_PATH, ref_features, top_k=search_top_k)
+    candidates = search(case_id, DB_PATH, ref_features, top_k=search_top_k, lang=lang)
 
     vlm_note = ""
     if use_vlm and candidates:
@@ -463,32 +476,34 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
         # kiệm lệnh gọi cho track rõ ràng không liên quan (xem
         # filter_prescreen_for_vlm/VLM_PRESCREEN_FLOOR trong demo_search.py).
         candidates_for_vlm = filter_prescreen_for_vlm(candidates)
-        progress(0.7, desc=f"Đang gửi {len(candidates_for_vlm)} ảnh crop tới ChatGPT Vision để tinh chỉnh (gửi ra ngoài mạng nội bộ)...")
+        progress(0.7, desc=i18n.t("search_progress_vlm", lang).format(n=len(candidates_for_vlm)))
         try:
             candidates = refine_with_vlm(ref_features, candidates_for_vlm)
-            vlm_note = " Đã tinh chỉnh bằng AI thị giác (ChatGPT Vision)."
+            vlm_note = i18n.t("search_vlm_refined_note", lang)
         except Exception as e:
             # Best-effort: lỗi API (hết quota, mạng, key sai...) không nên làm
             # sập cả giao diện — quay về kết quả so màu local và báo rõ lý do.
-            vlm_note = f" ⚠️ Lỗi khi gọi AI thị giác, dùng kết quả so màu local: {e}"
+            vlm_note = i18n.t("search_vlm_error_note", lang).format(error=e)
         # Đã tinh chỉnh xong (hoặc lỗi, rơi về điểm local) — giờ mới cắt về
         # đúng số lượng người dùng muốn xem, THEO TỪNG VIDEO (điểm đã đổi sau
         # VLM nên phải nhóm lại chứ không dùng lại nhóm từ trước lúc gọi VLM).
         candidates = group_top_k_per_video(candidates, int(top_k))
 
-    ref_desc = _describe(ref_features)
+    ref_desc = _describe(ref_features, lang=lang)
     n_used, n_total = ref_features.get("_n_images_used", 0), ref_features.get("_n_images_total", 0)
-    used_note = f" (dùng {n_used}/{n_total} ảnh)" if n_used < n_total else ""
+    used_note = i18n.t("search_used_images_note", lang).format(used=n_used, total=n_total) if n_used < n_total else ""
     ref_vlm_notes = ref_features.get("_vlm_notes")
     if ref_vlm_notes:
-        used_note += f" · Mô tả bằng AI thị giác: {ref_vlm_notes[0]}"
+        used_note += f"{i18n.t('search_vlm_desc_prefix', lang)}{ref_vlm_notes[0]}"
     extended = ref_features.get("_extended")
     if extended:
-        used_note += f" · Chi tiết khác: {vlm_compare.describe_extended_attrs_vi(extended)}"
+        used_note += f"{i18n.t('search_extra_details_prefix', lang)}{i18n.describe_extended_attrs(extended, lang)}"
     if ref_features.get("_build_note"):
-        used_note += f" · Vóc dáng (chỉ tham khảo): {ref_features['_build_note']}"
+        used_note += f"{i18n.t('search_build_note_prefix', lang)}{ref_features['_build_note']}"
     if ref_features.get("_gait_note"):
-        used_note += f" · Dáng đi (chỉ tham khảo): {ref_features['_gait_note']}"
+        used_note += f"{i18n.t('search_gait_note_prefix', lang)}{ref_features['_gait_note']}"
+
+    ref_features_prefix = i18n.t("search_ref_features_prefix", lang)
 
     # Toàn bộ video trong case — dùng để LIỆT KÊ ĐỦ mọi video ở phần "Ứng
     # viên phù hợp", kể cả video không có ứng viên nào (ghi rõ "Không có đối
@@ -497,7 +512,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
     all_video_labels = [label for label, _ in _video_choices(DB_PATH, case_id)]
 
     if not candidates:
-        status = f"Đặc điểm tham chiếu: {ref_desc}{used_note}. Không tìm thấy ứng viên nào."
+        status = f"{ref_features_prefix} {ref_desc}{used_note}. {i18n.t('search_no_candidates', lang)}"
         return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update()
 
     # Lọc theo ngưỡng tin cậy tối thiểu — hiển thị ứng viên điểm quá thấp
@@ -507,19 +522,20 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
     best_score = max(c["score"] for c in candidates)
     candidates = [c for c in candidates if c["score"] >= MIN_CONFIDENT_SCORE]
     if not candidates:
-        status = (
-            f"Đặc điểm tham chiếu: {ref_desc}{used_note}. "
-            f"Không tìm thấy đối tượng phù hợp — điểm khớp cao nhất chỉ đạt {best_score:.2f}, "
-            f"quá thấp để tin cậy là cùng 1 người (ngưỡng {MIN_CONFIDENT_SCORE})."
+        low_confidence = i18n.t("search_low_confidence_template", lang).format(
+            best=best_score, threshold=MIN_CONFIDENT_SCORE,
         )
+        status = f"{ref_features_prefix} {ref_desc}{used_note}. {low_confidence}"
         return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update()
 
     candidates_html = build_candidates_html(candidates, all_video_labels, lang=lang)
-    videos_summary = _describe_videos_with_matches(candidates)
+    videos_summary = _describe_videos_with_matches(candidates, lang=lang)
+    videos_title = i18n.t("search_videos_with_matches_title", lang).format(n=videos_summary["n_videos"])
+    candidates_title = i18n.t("search_candidates_qualified_title", lang).format(n=len(candidates), top_k=int(top_k))
     status = (
-        f"Đặc điểm tham chiếu: {ref_desc}{used_note}.\n\n"
-        f"**📹 Video có đối tượng xuất hiện ({videos_summary['n_videos']}):**\n{videos_summary['text']}\n\n"
-        f"**Ứng viên phù hợp đủ tiêu chuẩn ({len(candidates)}, tối đa {int(top_k)} người/video):**{vlm_note}"
+        f"{ref_features_prefix} {ref_desc}{used_note}.\n\n"
+        f"**{videos_title}**\n{videos_summary['text']}\n\n"
+        f"**{candidates_title}**{vlm_note}"
     )
 
     top1 = candidates[0]
@@ -529,7 +545,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
     )
     evidence = build_evidence_panel(top1, lang=lang)
 
-    progress(1.0, desc="Xong")
+    progress(1.0, desc=i18n.t("search_progress_done", lang))
     return candidates, candidates_html, status, video_dropdown_update, evidence, player_html
 
 
@@ -558,18 +574,18 @@ def on_gallery_click(idx, case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
 # modules/geo_route.py, không ảnh hưởng phần còn lại của app.
 # ---------------------------------------------------------------------------
 
-def on_geo_video_selected(case_id, video_id):
+def on_geo_video_selected(case_id, video_id, lang=i18n.DEFAULT_LANGUAGE):
     """Nạp địa chỉ/giờ quay đã lưu (nếu có) cho video vừa chọn, hoặc gợi ý
     địa chỉ từ tên camera (theo quy ước 'tên_địa chỉ') nếu chưa từng thiết
     lập — điều tra viên vẫn nên kiểm tra lại địa chỉ trước khi lưu."""
     if not case_id or not video_id:
-        return "", "", "⚠️ Chọn case và video trước."
+        return "", "", i18n.t("geo_err_select_first", lang)
     existing = geo_route.get_video_geo(DB_PATH, video_id)
     if existing:
         return (
             existing["address_label"] or "",
             geo_route.format_epoch(existing["recording_start_epoch"]),
-            "Đã có dữ liệu đã lưu trước đó cho video này — có thể sửa rồi lưu lại.",
+            i18n.t("geo_existing_data", lang),
         )
     videos = list_videos_in_case(DB_PATH, case_id)
     label = next((_video_label(v) for v in videos if v["video_id"] == video_id), None)
@@ -577,39 +593,35 @@ def on_geo_video_selected(case_id, video_id):
     return (
         suggested or "",
         "",
-        "Video chưa có địa chỉ — " + (
-            f"gợi ý từ tên camera: '{suggested}' (kiểm tra lại trước khi lưu)."
-            if suggested else "chưa có gợi ý (tên camera không theo quy ước 'tên_địa chỉ')."
+        i18n.t("geo_no_address_prefix", lang) + (
+            i18n.t("geo_suggested_template", lang).format(suggested=suggested)
+            if suggested else i18n.t("geo_no_suggestion", lang)
         ),
     )
 
 
-def on_save_video_geo(video_id, address_label, start_time_text):
+def on_save_video_geo(video_id, address_label, start_time_text, lang=i18n.DEFAULT_LANGUAGE):
     """Lưu địa chỉ + giờ quay cho video — toạ độ được TÌM TỰ ĐỘNG từ địa chỉ
     qua Nominatim (OpenStreetMap, miễn phí). Độ phủ địa chỉ chi tiết (số nhà,
     tên dong) ở Hàn Quốc qua OSM còn hạn chế — nếu không tìm được, hãy thử
     địa chỉ tổng quát hơn (tên phường/quận, hoặc địa danh gần đó)."""
     if not video_id:
-        return "⚠️ Chọn video trước."
+        return i18n.t("geo_save_err_no_video", lang)
     address_label = (address_label or "").strip()
     if not address_label:
-        return "⚠️ Nhập địa chỉ trước (dùng để tự tìm toạ độ)."
+        return i18n.t("geo_save_err_no_address", lang)
     start_epoch = geo_route.parse_datetime_local(start_time_text)
     if start_time_text and start_time_text.strip() and start_epoch is None:
-        return "⚠️ Giờ quay sai định dạng — dùng 'YYYY-MM-DD HH:MM:SS' (vd 2026-08-06 14:30:00)."
+        return i18n.t("geo_save_err_bad_time", lang)
     coords = geo_route.geocode_address(address_label)
     if coords is None:
-        return (
-            f"⚠️ Không tìm được toạ độ cho địa chỉ '{address_label}'. "
-            "Địa chỉ chi tiết (số nhà, tên dong) ở Hàn Quốc qua OpenStreetMap có thể chưa có dữ liệu — "
-            "thử địa chỉ tổng quát hơn (tên phường/quận/thành phố) hoặc 1 địa danh gần đó."
-        )
+        return i18n.t("geo_save_err_no_coords_template", lang).format(address=address_label)
     lat, lng = coords
     geo_route.set_video_geo(
         DB_PATH, video_id, lat=lat, lng=lng,
         address_label=address_label, recording_start_epoch=start_epoch,
     )
-    return f"✅ Đã lưu: {address_label} → toạ độ ({lat:.5f}, {lng:.5f})"
+    return i18n.t("geo_save_success_template", lang).format(address=address_label, lat=lat, lng=lng)
 
 
 def on_show_route(case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
@@ -620,7 +632,7 @@ def on_show_route(case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
     geo_by_video = geo_route.get_case_geo(DB_PATH, case_id)
     points = geo_route.build_route(candidates, geo_by_video)
     n_skipped = len(candidates) - len(points)
-    return geo_route.build_route_map_html(points, n_skipped_no_geo=n_skipped)
+    return geo_route.build_route_map_html(points, n_skipped_no_geo=n_skipped, lang=lang)
 
 
 # ---------------------------------------------------------------------------
@@ -785,7 +797,8 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     )
 
     create_case_btn.click(
-        on_create_case, inputs=[new_case_name], outputs=[case_dropdown, new_case_name, case_status]
+        on_create_case, inputs=[new_case_name, language_dropdown],
+        outputs=[case_dropdown, new_case_name, case_status],
     )
     case_dropdown.change(
         on_case_selected, inputs=[case_dropdown, language_dropdown], outputs=[video_dropdown, player] + geo_field_outputs
@@ -800,7 +813,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         inputs=[case_dropdown, video_dropdown, candidates_state, language_dropdown], outputs=[player],
     )
     video_dropdown.change(
-        on_geo_video_selected, inputs=[case_dropdown, video_dropdown], outputs=geo_field_outputs
+        on_geo_video_selected, inputs=[case_dropdown, video_dropdown, language_dropdown], outputs=geo_field_outputs
     )
     search_btn.click(
         run_search,
@@ -824,7 +837,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
 
     geo_save_btn.click(
         on_save_video_geo,
-        inputs=[video_dropdown, geo_address_input, geo_start_time_input],
+        inputs=[video_dropdown, geo_address_input, geo_start_time_input, language_dropdown],
         outputs=[geo_status],
     )
     show_route_btn.click(

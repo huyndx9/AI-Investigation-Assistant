@@ -30,6 +30,7 @@ from openai import OpenAI
 
 sys.path.insert(0, str(Path(__file__).parent))
 from appearance import COLOR_NAMES_VI  # noqa: E402
+import i18n  # noqa: E402
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -119,16 +120,11 @@ def is_configured() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY"))
 
 
-def get_setup_instructions() -> str:
-    return (
-        "Chưa cấu hình AI thị giác. Cần biến môi trường OPENAI_API_KEY.\n\n"
-        "1. Lấy API key tại https://platform.openai.com/api-keys\n"
-        "2. Đặt biến môi trường trong terminal (KHÔNG dán key vào chat): "
-        "OPENAI_API_KEY=<api-key-của-bạn>\n"
-        "3. Khởi động lại app.py từ terminal đã đặt biến đó\n\n"
-        "Lưu ý: bước tạo tài khoản và khai báo thanh toán bạn cần tự thực hiện — "
-        "Claude không thể làm hộ."
-    )
+def get_setup_instructions(lang: str = i18n.DEFAULT_LANGUAGE) -> str:
+    steps = "\n".join([
+        i18n.t("vlm_setup_step1", lang), i18n.t("vlm_setup_step2", lang), i18n.t("vlm_setup_step3", lang),
+    ])
+    return f"{i18n.t('vlm_setup_title', lang)}\n\n{steps}\n\n{i18n.t('vlm_setup_note', lang)}"
 
 
 # Tiết kiệm token: OpenAI Vision chia ảnh "auto"/"high" thành các ô 512x512
@@ -388,7 +384,6 @@ PATTERN_NAMES_VI = {"tron": "trơn", "soc": "sọc", "ca_ro": "caro", "hoa_tiet"
 HOLDING_OBJECT_NAMES_VI = {
     "dien_thoai": "điện thoại", "o_du": "ô/dù", "khac": "vật khác", "khong": "không cầm gì", "khong_ro": "không rõ",
 }
-MATCH_NAMES_VI = {"khop": "khớp", "khac": "khác", "khong_du_du_lieu": "không đủ dữ liệu"}
 
 
 def describe_extended_attrs_vi(extended: dict) -> str:

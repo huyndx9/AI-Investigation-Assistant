@@ -24,7 +24,12 @@ bừa vị trí).
 from __future__ import annotations
 
 import sqlite3
+import sys
 from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+import i18n  # noqa: E402
 
 
 def init_geo_table(db_path: str) -> None:
@@ -249,7 +254,7 @@ def _score_color(score: float) -> str:
 
 
 def build_route_map_html(
-    points: list[dict], n_skipped_no_geo: int = 0, height: int = 440
+    points: list[dict], n_skipped_no_geo: int = 0, height: int = 440, lang: str = i18n.DEFAULT_LANGUAGE,
 ) -> str:
     """HTML nhúng Leaflet.js + OpenStreetMap (miễn phí, không cần API key)
     vẽ các điểm camera theo thứ tự thời gian tuyệt đối, tô màu marker theo
@@ -259,14 +264,8 @@ def build_route_map_html(
     if not points:
         note = ""
         if n_skipped_no_geo:
-            note = (
-                f"<p style='color:#f39c12'>Có {n_skipped_no_geo} ứng viên nhưng video tương ứng "
-                "chưa thiết lập toạ độ/giờ quay — xem mục '📍 Vị trí camera & giờ quay thực'.</p>"
-            )
-        return (
-            "<p style='color:#888'>Chưa có đủ dữ liệu (toạ độ camera + giờ quay thực) "
-            f"để dựng lộ trình trên bản đồ.</p>{note}"
-        )
+            note = f"<p style='color:#f39c12'>{i18n.t('route_map_skipped_note_template', lang).format(n=n_skipped_no_geo)}</p>"
+        return f"<p style='color:#888'>{i18n.t('route_map_no_data', lang)}</p>{note}"
 
     import base64
     import json
@@ -285,16 +284,15 @@ def build_route_map_html(
             "popup": (
                 '<div style="color:#111 !important;font-size:13px;line-height:1.6;">'
                 f"<b style=\"color:#111 !important;\">#{i+1} {p['address_label']}</b><br>"
-                f"<span style=\"color:#111 !important;\">Camera: {p['video_label']}<br>"
-                f"Giờ: {p['abs_time_str']}<br>"
-                f"Điểm khớp: {p['score']:.2f}"
-                + (f"<br>Tổng {p['n_sightings']} lần khớp tại camera này (hiện điểm tin cậy cao nhất)"
+                f"<span style=\"color:#111 !important;\">{i18n.t('route_map_popup_camera', lang)} {p['video_label']}<br>"
+                f"{i18n.t('route_map_popup_time', lang)} {p['abs_time_str']}<br>"
+                f"{i18n.t('route_map_popup_score', lang)} {p['score']:.2f}"
+                + (f"<br>{i18n.t('route_map_popup_sightings_template', lang).format(n=p['n_sightings'])}"
                    if p.get("n_sightings", 1) > 1 else "")
                 + "</span>"
                 + (
                     "<br><i style=\"color:#b45309 !important;\">"
-                    f"⚠️ {p['overlap_count']} điểm trùng toạ độ gốc (địa chỉ chi tiết chưa "
-                    "giải mã được) — vị trí trên bản đồ đã tách nhẹ cho dễ nhìn, không chính xác tuyệt đối.</i>"
+                    f"⚠️ {i18n.t('route_map_popup_overlap_template', lang).format(n=p['overlap_count'])}</i>"
                     if p["overlap_count"] > 1 else ""
                 )
                 + "</div>"
@@ -308,7 +306,7 @@ def build_route_map_html(
 
     skipped_note = (
         f"<div style='font-size:12px;color:#f39c12;margin-bottom:6px;'>"
-        f"⚠️ {n_skipped_no_geo} ứng viên khác bị bỏ qua vì video chưa có toạ độ/giờ quay.</div>"
+        f"{i18n.t('route_map_skipped_note_short_template', lang).format(n=n_skipped_no_geo)}</div>"
         if n_skipped_no_geo else ""
     )
 
@@ -367,10 +365,7 @@ def build_route_map_html(
     <div style="font-family:sans-serif;">
       {skipped_note}
       <div style="font-size:12px;color:#aaa;margin-bottom:6px;">
-        Số trên điểm = thứ tự theo giờ quay THỰC TẾ đã thiết lập cho từng camera (1 = sớm nhất) —
-        màu điểm theo độ tin cậy (xanh lá: cao, vàng: trung bình, cam: thấp). Điểm trùng toạ độ gốc
-        được tách nhẹ để dễ nhìn (xem popup từng điểm). Đây là gợi ý thứ tự khả dĩ,
-        KHÔNG PHẢI kết luận lộ trình chắc chắn — điều tra viên tự xác minh.
+        {i18n.t("route_map_legend", lang)}
       </div>
       <div id="{map_id}" style="height:{height}px;border-radius:6px;"></div>
       <img src="data:," alt="" style="display:none" onerror="eval(atob('{js_b64}'))" />

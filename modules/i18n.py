@@ -236,6 +236,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "vi": "Bấm vào vạch màu trên thanh thời gian để nhảy tới đoạn nghi có đối tượng khớp.",
     },
     "player_camera_prefix": {"ko": "카메라:", "en": "Camera:", "vi": "Camera:"},
+    "player_marker_tooltip_template": {
+        "ko": "트랙 {track} — 점수 {score} — {start}-{end}초",
+        "en": "track {track} — score {score} — sec {start}-{end}",
+        "vi": "track {track} — điểm {score} — giây {start}-{end}",
+    },
     "clear_no_video_placeholder": {"ko": "*아직 영상이 없습니다.*", "en": "*No video yet.*", "vi": "*Chưa có video.*"},
     "candidates_no_results": {"ko": "*아직 결과가 없습니다.*", "en": "*No results yet.*", "vi": "*Chưa có kết quả.*"},
     "candidates_no_match_for_video": {
@@ -253,6 +258,452 @@ STRINGS: dict[str, dict[str, str]] = {
         "vi": "Chưa có kết quả tìm kiếm — bấm 'Tìm kiếm' trước.",
     },
     "route_not_viewed_yet": {"ko": "*아직 경로를 보지 않았습니다.*", "en": "*Route not viewed yet.*", "vi": "*Chưa xem lộ trình.*"},
+    # -------------------------------------------------------------------
+    # Evidence panel (full content) + search status + geo status + route
+    # map popup text -- generated at request time by app.py, demo_search.py,
+    # vlm_compare.py, and geo_route.py's build_route_map_html(). Added when
+    # the static-chrome/placeholder localization above turned out not to be
+    # enough -- investigators read this content the most.
+    # -------------------------------------------------------------------
+    "evidence_header_template": {
+        "ko": "### 트랙 `{track}` — 카메라 {camera} — 일치 점수 {score}",
+        "en": "### Track `{track}` — camera {camera} — match score {score}",
+        "vi": "### Track `{track}` — camera {camera} — điểm khớp {score}",
+    },
+    "evidence_seen_template": {
+        "ko": "출현: **{start}**초 ~ **{end}**초",
+        "en": "Appears: second **{start}** to **{end}**",
+        "vi": "Xuất hiện: giây **{start}** đến **{end}**",
+    },
+    "evidence_col_attribute": {"ko": "특징", "en": "Attribute", "vi": "Đặc điểm"},
+    "evidence_col_value": {"ko": "값", "en": "Value", "vi": "Giá trị"},
+    "evidence_col_confidence": {"ko": "신뢰도", "en": "Confidence", "vi": "Độ tin cậy"},
+    "attr_color_top": {"ko": "상의 색상", "en": "Top color", "vi": "Màu áo"},
+    "attr_color_bottom": {"ko": "하의 색상", "en": "Bottom color", "vi": "Màu quần"},
+    "attr_sleeve": {"ko": "소매", "en": "Sleeve", "vi": "Tay áo"},
+    "attr_hat": {"ko": "모자", "en": "Hat", "vi": "Mũ"},
+    "attr_hair": {"ko": "머리", "en": "Hair", "vi": "Tóc"},
+    "attr_shoes": {"ko": "신발", "en": "Shoes", "vi": "Giày"},
+    "evidence_score_reason_title": {"ko": "**점수 근거:**", "en": "**Score reasoning:**", "vi": "**Lý do điểm số:**"},
+    "evidence_vlm_title": {
+        "ko": "**🔍 시각 AI 평가 (크롭 이미지를 OpenAI API로 전송함):**",
+        "en": "**🔍 Visual AI assessment (crop images sent to the OpenAI API):**",
+        "vi": "**🔍 Đánh giá bằng AI thị giác (đã gửi ảnh crop ra ngoài qua OpenAI API):**",
+    },
+    "vlm_same_person": {"ko": "동일 인물 가능성 있음", "en": "Likely the SAME person", "vi": "Có khả năng CÙNG người"},
+    "vlm_diff_person": {"ko": "다른 인물 가능성 있음", "en": "Likely a DIFFERENT person", "vi": "Có khả năng KHÁC người"},
+    "vlm_confidence_cao": {"ko": "높음", "en": "high", "vi": "cao"},
+    "vlm_confidence_trung_binh": {"ko": "중간", "en": "medium", "vi": "trung bình"},
+    "vlm_confidence_thap": {"ko": "낮음", "en": "low", "vi": "thấp"},
+    "evidence_verdict_template": {
+        "ko": "- 결론: **{same}** — 신뢰도: **{confidence}**",
+        "en": "- Verdict: **{same}** — confidence: **{confidence}**",
+        "vi": "- Kết luận: **{same}** — độ tin cậy: **{confidence}**",
+    },
+    "evidence_reasoning_prefix": {"ko": "- 이유:", "en": "- Reasoning:", "vi": "- Lý do:"},
+    "evidence_reasoning_none": {"ko": "(없음)", "en": "(none)", "vi": "(không có)"},
+    "evidence_bag_prefix": {"ko": "- 가방/배낭:", "en": "- Bag/backpack:", "vi": "- Túi/balo:"},
+    "evidence_clothing_prefix": {
+        "ko": "- 옷 종류 & 무늬:", "en": "- Clothing type & pattern:", "vi": "- Loại trang phục & hoạ tiết:",
+    },
+    "evidence_accessories_prefix": {
+        "ko": "- 액세서리 (안경/마스크/소지품):", "en": "- Accessories (glasses/mask/handheld items):",
+        "vi": "- Phụ kiện (kính/khẩu trang/đồ cầm tay):",
+    },
+    "evidence_build_gait_prefix": {
+        "ko": "- 체형/걸음걸이 (참고용):", "en": "- Build/gait (reference only):", "vi": "- Vóc dáng/dáng đi (chỉ tham khảo):",
+    },
+    "evidence_color_score_template": {
+        "ko": "- 색상 점수 (로컬): {local:.2f} → 결합 점수: {combined:.2f}",
+        "en": "- Color score (local): {local:.2f} → combined score: {combined:.2f}",
+        "vi": "- Điểm màu sắc (local): {local:.2f} → điểm kết hợp: {combined:.2f}",
+    },
+    "match_khop": {"ko": "일치", "en": "match", "vi": "khớp"},
+    "match_khac": {"ko": "불일치", "en": "different", "vi": "khác"},
+    "match_khong_du_du_lieu": {"ko": "데이터 부족", "en": "insufficient data", "vi": "không đủ dữ liệu"},
+    # Score-explanation strings built by modules/demo_search.py
+    "expl_skip_template": {
+        "ko": "{attr}: 건너뜀 (한쪽 데이터 부족)",
+        "en": "{attr}: skipped (insufficient data on one side)",
+        "vi": "{attr}: bỏ qua (không đủ dữ liệu ở 1 trong 2 bên)",
+    },
+    "expl_compare_template": {
+        "ko": "{attr}: 참조={ref} vs 트랙={track} -> {result} (가중치 {weight})",
+        "en": "{attr}: reference={ref} vs track={track} -> {result} (weight {weight})",
+        "vi": "{attr}: ảnh={ref} vs track={track} -> {result} (trọng số {weight})",
+    },
+    "expl_no_common_attrs": {
+        "ko": "비교할 공통 특징이 부족합니다.", "en": "Not enough common features to compare.",
+        "vi": "Không đủ đặc điểm chung để so sánh.",
+    },
+    "expl_reid_no_data": {
+        "ko": "외형 특징(ReID): 임베딩 데이터가 없어 속성 점수만 사용합니다.",
+        "en": "Appearance features (ReID): no embedding data available, using the attribute score only.",
+        "vi": "Đặc điểm ngoại hình (ReID): chưa có dữ liệu embedding, dùng riêng điểm thuộc tính.",
+    },
+    "expl_reid_template": {
+        "ko": "외형 특징(ReID): 유사도 {sim:.2f} -> 점수 {score:.2f} (가중치 {embed_w}) — 속성 점수 {attr:.2f} (가중치 {attr_w})",
+        "en": "Appearance features (ReID): similarity {sim:.2f} -> score {score:.2f} (weight {embed_w}) — "
+              "attribute score {attr:.2f} (weight {attr_w})",
+        "vi": "Đặc điểm ngoại hình (ReID): tương đồng {sim:.2f} -> điểm {score:.2f} (trọng số {embed_w}) — "
+              "điểm thuộc tính {attr:.2f} (trọng số {attr_w})",
+    },
+    # Reference-description sentence built by app.py's _describe()
+    "ref_desc_template": {
+        "ko": "상의 {top}, 하의 {bottom}, 소매 {sleeve}, {hat}, {hair}, {shoes}",
+        "en": "top {top}, bottom {bottom}, sleeve {sleeve}, {hat}, {hair}, {shoes}",
+        "vi": "áo {top}, quần {bottom}, tay áo {sleeve}, {hat}, {hair}, {shoes}",
+    },
+    # run_search() status / progress / error text (app.py)
+    "ref_vlm_describe_error_template": {
+        "ko": "⚠️ 참조 이미지 설명 중 시각 AI 오류, 로컬 색상 휴리스틱을 사용합니다: {error}",
+        "en": "⚠️ Visual AI error while describing the reference image, using the local color heuristic instead: {error}",
+        "vi": "⚠️ Lỗi AI thị giác khi mô tả ảnh tham chiếu, dùng heuristic màu cục bộ: {error}",
+    },
+    "search_progress_extract": {
+        "ko": "참조 이미지 {n}장에서 특징을 추출하는 중...",
+        "en": "Extracting features from {n} reference image(s)...",
+        "vi": "Đang trích đặc điểm từ {n} ảnh tham chiếu...",
+    },
+    "search_progress_match": {
+        "ko": "사건 전체 후보와 대조하는 중...", "en": "Matching against candidates across the case...",
+        "vi": "Đang so khớp với các ứng viên trong toàn bộ case...",
+    },
+    "search_progress_vlm": {
+        "ko": "크롭 이미지 {n}장을 ChatGPT Vision으로 전송하여 정밀 비교하는 중 (내부 네트워크 밖으로 전송)...",
+        "en": "Sending {n} crop image(s) to ChatGPT Vision for refinement (leaves the local network)...",
+        "vi": "Đang gửi {n} ảnh crop tới ChatGPT Vision để tinh chỉnh (gửi ra ngoài mạng nội bộ)...",
+    },
+    "search_progress_done": {"ko": "완료", "en": "Done", "vi": "Xong"},
+    "search_err_no_case": {
+        "ko": "⚠️ 먼저 사건을 선택하거나 생성하세요.", "en": "⚠️ Select or create a case first.",
+        "vi": "⚠️ Chọn hoặc tạo case trước.",
+    },
+    "search_err_no_ref_images": {
+        "ko": "⚠️ 참조 이미지를 1장 이상 선택하세요.", "en": "⚠️ Select at least 1 reference image.",
+        "vi": "⚠️ Vui lòng chọn ít nhất 1 ảnh tham chiếu.",
+    },
+    "search_err_no_person_detected": {
+        "ko": "❌ 참조 이미지에서 사람을 감지하지 못했습니다.", "en": "❌ No person was detected in any reference image.",
+        "vi": "❌ Không phát hiện được người trong ảnh tham chiếu nào.",
+    },
+    "search_vlm_refined_note": {
+        "ko": " 시각 AI(ChatGPT Vision)로 정밀 비교했습니다.", "en": " Refined using visual AI (ChatGPT Vision).",
+        "vi": " Đã tinh chỉnh bằng AI thị giác (ChatGPT Vision).",
+    },
+    "search_vlm_error_note": {
+        "ko": " ⚠️ 시각 AI 호출 오류, 로컬 색상 비교 결과를 사용합니다: {error}",
+        "en": " ⚠️ Error calling visual AI, using local color-matching results instead: {error}",
+        "vi": " ⚠️ Lỗi khi gọi AI thị giác, dùng kết quả so màu local: {error}",
+    },
+    "search_ref_features_prefix": {"ko": "참조 특징:", "en": "Reference features:", "vi": "Đặc điểm tham chiếu:"},
+    "search_used_images_note": {
+        "ko": " ({used}/{total}장 사용)", "en": " (used {used}/{total} images)", "vi": " (dùng {used}/{total} ảnh)",
+    },
+    "search_vlm_desc_prefix": {
+        "ko": " · 시각 AI 설명: ", "en": " · Described by visual AI: ", "vi": " · Mô tả bằng AI thị giác: ",
+    },
+    "search_extra_details_prefix": {
+        "ko": " · 기타 세부사항: ", "en": " · Other details: ", "vi": " · Chi tiết khác: ",
+    },
+    "search_build_note_prefix": {
+        "ko": " · 체형 (참고용): ", "en": " · Build (reference only): ", "vi": " · Vóc dáng (chỉ tham khảo): ",
+    },
+    "search_gait_note_prefix": {
+        "ko": " · 걸음걸이 (참고용): ", "en": " · Gait (reference only): ", "vi": " · Dáng đi (chỉ tham khảo): ",
+    },
+    "search_no_candidates": {
+        "ko": "후보를 찾지 못했습니다.", "en": "No candidates found.", "vi": "Không tìm thấy ứng viên nào.",
+    },
+    "search_low_confidence_template": {
+        "ko": "일치하는 대상을 찾지 못했습니다 — 최고 점수가 {best:.2f}에 불과해, 동일 인물로 신뢰하기에는 "
+              "너무 낮습니다 (기준값 {threshold}).",
+        "en": "No qualifying match found — the highest score was only {best:.2f}, too low to be confident "
+              "it's the same person (threshold {threshold}).",
+        "vi": "Không tìm thấy đối tượng phù hợp — điểm khớp cao nhất chỉ đạt {best:.2f}, quá thấp để tin cậy "
+              "là cùng 1 người (ngưỡng {threshold}).",
+    },
+    "search_videos_with_matches_title": {
+        "ko": "📹 대상이 나타난 영상 ({n}개):", "en": "📹 Videos where the subject appears ({n}):",
+        "vi": "📹 Video có đối tượng xuất hiện ({n}):",
+    },
+    "search_candidates_qualified_title": {
+        "ko": "기준을 충족한 후보 ({n}명, 영상당 최대 {top_k}명):",
+        "en": "Qualifying candidates ({n}, up to {top_k} per video):",
+        "vi": "Ứng viên phù hợp đủ tiêu chuẩn ({n}, tối đa {top_k} người/video):",
+    },
+    "search_video_match_row_template": {
+        "ko": "- {label} — {n}회 출현, 최고 점수 {best:.2f}",
+        "en": "- {label} — {n} appearance(s), best score {best:.2f}",
+        "vi": "- {label} — {n} lần xuất hiện, điểm cao nhất {best:.2f}",
+    },
+    "search_no_videos": {"ko": "(없음)", "en": "(none)", "vi": "(không có)"},
+    # Case / video management status text (app.py)
+    "case_err_no_name": {
+        "ko": "⚠️ 먼저 사건 이름을 입력하세요.", "en": "⚠️ Enter a case name first.", "vi": "⚠️ Nhập tên case trước.",
+    },
+    "case_created_template": {
+        "ko": "✅ 사건 생성됨: {name}", "en": "✅ Case created: {name}", "vi": "✅ Đã tạo case: {name}",
+    },
+    "add_video_err_no_files": {
+        "ko": "⚠️ 영상 파일을 1개 이상 선택하세요.", "en": "⚠️ Select at least 1 video file.",
+        "vi": "⚠️ Chọn ít nhất 1 file video.",
+    },
+    "add_video_progress_template": {
+        "ko": "영상 {i}/{n} 처리 중...", "en": "Processing video {i}/{n}...", "vi": "Đang xử lý video {i}/{n}...",
+    },
+    "add_video_success_template": {
+        "ko": "✅ 영상 {count}개 추가됨. 현재 사건에 영상 {total}개가 있습니다.",
+        "en": "✅ Added {count} video(s). The case now has {total} video(s).",
+        "vi": "✅ Đã thêm {count} video. Case hiện có {total} video.",
+    },
+    "clear_err_no_case": {
+        "ko": "⚠️ 먼저 사건을 선택하세요.", "en": "⚠️ Select a case first.", "vi": "⚠️ Chọn case trước.",
+    },
+    "clear_err_not_confirmed": {
+        "ko": "⚠️ 삭제 전에 확인란을 체크하세요.", "en": "⚠️ Please tick the confirmation box before deleting.",
+        "vi": "⚠️ Vui lòng tick xác nhận trước khi xoá.",
+    },
+    "clear_success_template": {
+        "ko": "✅ 영상 {n}개를 사건에서 삭제했습니다. 사건이 비워졌으며 새 영상을 추가할 수 있습니다.",
+        "en": "✅ Deleted {n} video(s) from the case. The case is now empty and ready for new videos.",
+        "vi": "✅ Đã xoá {n} video khỏi case. Case hiện trống, sẵn sàng thêm video mới.",
+    },
+    # Geo (location/time) status text (app.py)
+    "geo_err_select_first": {
+        "ko": "⚠️ 사건과 영상을 먼저 선택하세요.", "en": "⚠️ Select a case and video first.",
+        "vi": "⚠️ Chọn case và video trước.",
+    },
+    "geo_existing_data": {
+        "ko": "이 영상에 대해 이전에 저장된 데이터가 있습니다 — 수정 후 다시 저장할 수 있습니다.",
+        "en": "This video already has previously saved data — you can edit and save it again.",
+        "vi": "Đã có dữ liệu đã lưu trước đó cho video này — có thể sửa rồi lưu lại.",
+    },
+    "geo_no_address_prefix": {
+        "ko": "영상에 아직 주소가 없습니다 — ", "en": "This video has no address yet — ",
+        "vi": "Video chưa có địa chỉ — ",
+    },
+    "geo_suggested_template": {
+        "ko": "카메라 이름에서 제안: '{suggested}' (저장 전에 다시 확인하세요).",
+        "en": "suggested from the camera name: '{suggested}' (verify before saving).",
+        "vi": "gợi ý từ tên camera: '{suggested}' (kiểm tra lại trước khi lưu).",
+    },
+    "geo_no_suggestion": {
+        "ko": "제안할 수 없습니다 (카메라 이름이 '이름_주소' 규칙을 따르지 않음).",
+        "en": "no suggestion available (camera name doesn't follow the 'name_address' convention).",
+        "vi": "chưa có gợi ý (tên camera không theo quy ước 'tên_địa chỉ').",
+    },
+    "geo_save_err_no_video": {
+        "ko": "⚠️ 먼저 영상을 선택하세요.", "en": "⚠️ Select a video first.", "vi": "⚠️ Chọn video trước.",
+    },
+    "geo_save_err_no_address": {
+        "ko": "⚠️ 좌표를 자동으로 찾기 위해 주소를 먼저 입력하세요.",
+        "en": "⚠️ Enter an address first (used to look up coordinates automatically).",
+        "vi": "⚠️ Nhập địa chỉ trước (dùng để tự tìm toạ độ).",
+    },
+    "geo_save_err_bad_time": {
+        "ko": "⚠️ 촬영 시각 형식이 잘못되었습니다 — 'YYYY-MM-DD HH:MM:SS' 형식을 사용하세요 (예: 2026-08-06 14:30:00).",
+        "en": "⚠️ Recording time has the wrong format — use 'YYYY-MM-DD HH:MM:SS' (e.g. 2026-08-06 14:30:00).",
+        "vi": "⚠️ Giờ quay sai định dạng — dùng 'YYYY-MM-DD HH:MM:SS' (vd 2026-08-06 14:30:00).",
+    },
+    "geo_save_err_no_coords_template": {
+        "ko": "⚠️ 주소 '{address}'의 좌표를 찾을 수 없습니다. 한국의 상세 주소(번지, 동 이름)는 OpenStreetMap에 "
+              "데이터가 없을 수 있습니다 — 더 넓은 범위의 주소(동/구/시 이름)나 근처의 랜드마크를 시도해보세요.",
+        "en": "⚠️ Could not find coordinates for address '{address}'. Detailed Korean addresses (building "
+              "number, dong name) may not be covered by OpenStreetMap — try a broader address "
+              "(neighborhood/district/city name) or a nearby landmark.",
+        "vi": "⚠️ Không tìm được toạ độ cho địa chỉ '{address}'. Địa chỉ chi tiết (số nhà, tên dong) ở Hàn "
+              "Quốc qua OpenStreetMap có thể chưa có dữ liệu — thử địa chỉ tổng quát hơn (tên phường/quận/"
+              "thành phố) hoặc 1 địa danh gần đó.",
+    },
+    "geo_save_success_template": {
+        "ko": "✅ 저장됨: {address} → 좌표 ({lat:.5f}, {lng:.5f})",
+        "en": "✅ Saved: {address} → coordinates ({lat:.5f}, {lng:.5f})",
+        "vi": "✅ Đã lưu: {address} → toạ độ ({lat:.5f}, {lng:.5f})",
+    },
+    # AI-vision (VLM) setup instructions (modules/vlm_compare.py)
+    "vlm_setup_title": {
+        "ko": "시각 AI가 설정되지 않았습니다. OPENAI_API_KEY 환경 변수가 필요합니다.",
+        "en": "Visual AI is not configured. The OPENAI_API_KEY environment variable is required.",
+        "vi": "Chưa cấu hình AI thị giác. Cần biến môi trường OPENAI_API_KEY.",
+    },
+    "vlm_setup_step1": {
+        "ko": "1. https://platform.openai.com/api-keys 에서 API 키를 발급받으세요",
+        "en": "1. Get an API key at https://platform.openai.com/api-keys",
+        "vi": "1. Lấy API key tại https://platform.openai.com/api-keys",
+    },
+    "vlm_setup_step2": {
+        "ko": "2. 터미널에서 환경 변수를 설정하세요 (채팅에 키를 붙여넣지 마세요): OPENAI_API_KEY=<your-api-key>",
+        "en": "2. Set the environment variable in your terminal (do NOT paste the key into chat): "
+              "OPENAI_API_KEY=<your-api-key>",
+        "vi": "2. Đặt biến môi trường trong terminal (KHÔNG dán key vào chat): OPENAI_API_KEY=<api-key-của-bạn>",
+    },
+    "vlm_setup_step3": {
+        "ko": "3. 해당 환경 변수가 설정된 터미널에서 app.py를 다시 시작하세요",
+        "en": "3. Restart app.py from a terminal where that variable is set",
+        "vi": "3. Khởi động lại app.py từ terminal đã đặt biến đó",
+    },
+    "vlm_setup_note": {
+        "ko": "참고: 계정 생성 및 결제 정보 등록은 직접 진행해야 합니다 — Claude가 대신할 수 없습니다.",
+        "en": "Note: account creation and billing setup must be done by you — Claude cannot do this for you.",
+        "vi": "Lưu ý: bước tạo tài khoản và khai báo thanh toán bạn cần tự thực hiện — Claude không thể làm hộ.",
+    },
+    # Extended reference-attribute description (modules/vlm_compare.py)
+    "ext_has_bag": {"ko": "가방/배낭 있음", "en": "has bag/backpack", "vi": "có túi/balo"},
+    "ext_no_bag": {"ko": "가방 없음", "en": "no bag", "vi": "không mang túi"},
+    "ext_bottom_prefix": {"ko": "하의: ", "en": "bottom: ", "vi": "phần dưới: "},
+    "ext_outerwear_prefix": {"ko": "상의: ", "en": "top: ", "vi": "áo: "},
+    "ext_pattern_prefix": {"ko": "무늬 ", "en": "pattern ", "vi": "hoạ tiết "},
+    "ext_glasses": {"ko": "안경 착용", "en": "wearing glasses", "vi": "đeo kính"},
+    "ext_mask": {"ko": "마스크 착용", "en": "wearing a mask", "vi": "đeo khẩu trang"},
+    "ext_holding_prefix": {"ko": "들고 있음: ", "en": "holding: ", "vi": "đang cầm "},
+    "ext_no_extra_details": {
+        "ko": "추가로 특이한 세부사항 없음", "en": "no notable additional details",
+        "vi": "không có chi tiết bổ sung rõ ràng",
+    },
+    # Route map popup text (modules/geo_route.py's build_route_map_html())
+    "route_map_skipped_note_template": {
+        "ko": "후보 {n}명이 있지만 해당 영상에 아직 좌표/촬영 시각이 설정되지 않았습니다 — 위의 '📍 카메라 "
+              "위치 및 촬영 시각' 항목을 확인하세요.",
+        "en": "There are {n} candidate(s) but their videos don't have location/recording time set yet — "
+              "see the '📍 Camera location & recording time' section above.",
+        "vi": "Có {n} ứng viên nhưng video tương ứng chưa thiết lập toạ độ/giờ quay — xem mục '📍 Vị trí "
+              "camera & giờ quay thực'.",
+    },
+    "route_map_skipped_note_short_template": {
+        "ko": "⚠️ 다른 후보 {n}명은 영상에 좌표/촬영 시각이 없어 제외되었습니다.",
+        "en": "⚠️ {n} other candidate(s) were skipped because their video has no location/recording time set.",
+        "vi": "⚠️ {n} ứng viên khác bị bỏ qua vì video chưa có toạ độ/giờ quay.",
+    },
+    "route_map_no_data": {
+        "ko": "지도에 경로를 그리기 위한 데이터(카메라 좌표 + 실제 촬영 시각)가 아직 충분하지 않습니다.",
+        "en": "Not enough data yet (camera coordinates + actual recording time) to plot a route on the map.",
+        "vi": "Chưa có đủ dữ liệu (toạ độ camera + giờ quay thực tế) để dựng lộ trình trên bản đồ.",
+    },
+    "route_map_popup_camera": {"ko": "카메라:", "en": "Camera:", "vi": "Camera:"},
+    "route_map_popup_time": {"ko": "시각:", "en": "Time:", "vi": "Giờ:"},
+    "route_map_popup_score": {"ko": "일치 점수:", "en": "Match score:", "vi": "Điểm khớp:"},
+    "route_map_popup_sightings_template": {
+        "ko": "이 카메라에서 총 {n}회 일치 (가장 높은 신뢰도 점수 표시)",
+        "en": "Total {n} matches at this camera (showing the highest-confidence score)",
+        "vi": "Tổng {n} lần khớp tại camera này (hiện điểm tin cậy cao nhất)",
+    },
+    "route_map_popup_overlap_template": {
+        "ko": "⚠️ 원래 좌표와 겹치는 지점 {n}개 (상세 주소가 해석되지 않음) — 지도에서 보기 쉽도록 살짝 "
+              "분산했으며, 절대적으로 정확하지 않습니다.",
+        "en": "⚠️ {n} point(s) overlapping the original coordinates (detailed address not resolved) — "
+              "positions have been spread slightly for visibility, not exact.",
+        "vi": "⚠️ {n} điểm trùng toạ độ gốc (địa chỉ chi tiết chưa giải mã được) — vị trí trên bản đồ đã "
+              "tách nhẹ cho dễ nhìn, không chính xác tuyệt đối.",
+    },
+    "route_map_legend": {
+        "ko": "점 위 숫자 = 각 카메라에 설정된 실제 촬영 시각 순서 (1 = 가장 이른 시각) — 점 색상은 신뢰도를 "
+              "나타냅니다 (초록: 높음, 노랑: 중간, 주황: 낮음). 원래 좌표가 겹치는 점은 보기 쉽도록 살짝 "
+              "분산했습니다 (각 점의 팝업 참고). 이는 가능성 있는 순서 제안일 뿐이며, 확정된 경로 결론이 "
+              "아닙니다 — 수사관이 직접 확인해야 합니다.",
+        "en": "The number on each point = order by each camera's ACTUAL recording time (1 = earliest) — "
+              "point color reflects confidence (green: high, yellow: medium, orange: low). Points sharing "
+              "the same original coordinates have been spread slightly for visibility (see each point's "
+              "popup). This is only a plausible ordering suggestion, NOT a confirmed route conclusion — "
+              "the investigator must verify it.",
+        "vi": "Số trên điểm = thứ tự theo giờ quay THỰC TẾ đã thiết lập cho từng camera (1 = sớm nhất) — "
+              "màu điểm theo độ tin cậy (xanh lá: cao, vàng: trung bình, cam: thấp). Điểm trùng toạ độ gốc "
+              "được tách nhẹ để dễ nhìn (xem popup từng điểm). Đây là gợi ý thứ tự khả dĩ, KHÔNG PHẢI kết "
+              "luận lộ trình chắc chắn — điều tra viên tự xác minh.",
+    },
+}
+
+# ---------------------------------------------------------------------------
+# Attribute VALUE lookup tables -- translate the fixed vocabulary codes
+# stored in the DB / used by appearance.py & vlm_compare.py (e.g. "den",
+# "dai_tay", "vai_trai") into the current language. Separate from STRINGS
+# above because these are keyed by data code, not by UI-role identifier.
+# ---------------------------------------------------------------------------
+
+COLOR_VALUES: dict[str, dict[str, str]] = {
+    "do": {"ko": "빨강", "en": "red", "vi": "đỏ"},
+    "vang": {"ko": "노랑", "en": "yellow", "vi": "vàng"},
+    "xanh_la": {"ko": "초록", "en": "green", "vi": "xanh lá"},
+    "xanh_duong": {"ko": "파랑", "en": "blue", "vi": "xanh dương"},
+    "den": {"ko": "검정", "en": "black", "vi": "đen"},
+    "trang": {"ko": "흰색", "en": "white", "vi": "trắng"},
+    "xam": {"ko": "회색", "en": "gray", "vi": "xám"},
+    "khac": {"ko": "기타", "en": "other", "vi": "khác"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+SLEEVE_VALUES: dict[str, dict[str, str]] = {
+    "dai_tay": {"ko": "긴팔", "en": "long sleeve", "vi": "dài tay"},
+    "ngan_tay": {"ko": "반팔", "en": "short sleeve", "vi": "ngắn tay"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+HAT_VALUES: dict[str, dict[str, str]] = {
+    "co": {"ko": "모자 착용", "en": "wearing a hat", "vi": "có mũ"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+HAIRSTYLE_VALUES: dict[str, dict[str, str]] = {
+    "dai": {"ko": "긴 머리", "en": "long hair", "vi": "tóc dài"},
+    "ngan": {"ko": "짧은 머리", "en": "short hair", "vi": "tóc ngắn"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+SHOES_VALUES: dict[str, dict[str, str]] = {
+    "co": {"ko": "신발 착용", "en": "wearing shoes", "vi": "có giày"},
+    "khong": {"ko": "신발 없음", "en": "no shoes", "vi": "không giày"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+BAG_POSITION_VALUES: dict[str, dict[str, str]] = {
+    "vai_trai": {"ko": "왼쪽 어깨", "en": "left shoulder", "vi": "vai trái"},
+    "vai_phai": {"ko": "오른쪽 어깨", "en": "right shoulder", "vi": "vai phải"},
+    "sau_lung": {"ko": "등 뒤", "en": "on the back", "vi": "sau lưng"},
+    "cam_tay": {"ko": "손에 듦", "en": "held in hand", "vi": "cầm tay"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+BOTTOM_TYPE_VALUES: dict[str, dict[str, str]] = {
+    "quan_dai": {"ko": "긴 바지", "en": "long pants", "vi": "quần dài"},
+    "quan_short": {"ko": "반바지", "en": "shorts", "vi": "quần short"},
+    "vay": {"ko": "치마", "en": "skirt", "vi": "váy"},
+    "dam": {"ko": "원피스", "en": "dress", "vi": "đầm"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+OUTERWEAR_TYPE_VALUES: dict[str, dict[str, str]] = {
+    "ao_khoac": {"ko": "자켓/외투", "en": "jacket/coat", "vi": "áo khoác"},
+    "so_mi": {"ko": "셔츠", "en": "shirt", "vi": "áo sơ mi"},
+    "thun": {"ko": "티셔츠", "en": "t-shirt", "vi": "áo thun"},
+    "hoodie": {"ko": "후드티", "en": "hoodie", "vi": "hoodie"},
+    "khac": {"ko": "기타", "en": "other", "vi": "khác"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+PATTERN_VALUES: dict[str, dict[str, str]] = {
+    "tron": {"ko": "무지", "en": "plain", "vi": "trơn"},
+    "soc": {"ko": "줄무늬", "en": "striped", "vi": "sọc"},
+    "ca_ro": {"ko": "체크무늬", "en": "plaid", "vi": "caro"},
+    "hoa_tiet": {"ko": "패턴 있음", "en": "patterned", "vi": "có hoạ tiết"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+HOLDING_OBJECT_VALUES: dict[str, dict[str, str]] = {
+    "dien_thoai": {"ko": "휴대폰", "en": "phone", "vi": "điện thoại"},
+    "o_du": {"ko": "우산", "en": "umbrella", "vi": "ô/dù"},
+    "khac": {"ko": "기타 물건", "en": "other object", "vi": "vật khác"},
+    "khong": {"ko": "손에 든 것 없음", "en": "not holding anything", "vi": "không cầm gì"},
+    "khong_ro": {"ko": "불명확", "en": "unclear", "vi": "không rõ"},
+}
+
+# Maps ATTRIBUTE_WEIGHTS keys (modules/demo_search.py) to STRINGS label keys
+# and to the value table used to translate that attribute's raw code.
+ATTR_LABEL_KEYS: dict[str, str] = {
+    "color_top": "attr_color_top",
+    "color_bottom": "attr_color_bottom",
+    "sleeve_length": "attr_sleeve",
+    "has_hat": "attr_hat",
+    "hairstyle": "attr_hair",
+    "has_shoes": "attr_shoes",
+}
+ATTR_VALUE_TABLES: dict[str, dict[str, dict[str, str]]] = {
+    "color_top": COLOR_VALUES,
+    "color_bottom": COLOR_VALUES,
+    "sleeve_length": SLEEVE_VALUES,
+    "has_hat": HAT_VALUES,
+    "hairstyle": HAIRSTYLE_VALUES,
+    "has_shoes": SHOES_VALUES,
 }
 
 
@@ -261,3 +712,53 @@ def t(key: str, lang: str) -> str:
     itself, so a missing translation never crashes the UI."""
     entry = STRINGS.get(key, {})
     return entry.get(lang) or entry.get("en") or key
+
+
+def value(table: dict[str, dict[str, str]], code: str | None, lang: str) -> str:
+    """Look up a raw data code (e.g. 'den', 'dai_tay') in one of the
+    attribute-value tables above. Falls back to English, then the raw code
+    itself, so an unrecognized code never crashes the UI."""
+    entry = table.get(code or "", {})
+    return entry.get(lang) or entry.get("en") or (code or "?")
+
+
+def describe_extended_attrs(extended: dict, lang: str) -> str:
+    """Localized equivalent of vlm_compare's old describe_extended_attrs_vi()
+    -- summarizes the extended reference attributes (bag, clothing type,
+    pattern, accessories) collected when visual AI describes the reference
+    image."""
+    parts = []
+    has_bag = extended.get("has_bag")
+    if has_bag == "co":
+        detail_codes = [extended.get("bag_color"), extended.get("bag_position")]
+        detail = ", ".join(
+            value(COLOR_VALUES if i == 0 else BAG_POSITION_VALUES, code, lang)
+            for i, code in enumerate(detail_codes)
+            if code and code != "khong_ro"
+        )
+        parts.append(t("ext_has_bag", lang) + (f" ({detail})" if detail else ""))
+    elif has_bag == "khong":
+        parts.append(t("ext_no_bag", lang))
+
+    bottom_type = extended.get("bottom_type")
+    if bottom_type and bottom_type != "khong_ro":
+        parts.append(t("ext_bottom_prefix", lang) + value(BOTTOM_TYPE_VALUES, bottom_type, lang))
+
+    outerwear = extended.get("outerwear_type")
+    if outerwear and outerwear != "khong_ro":
+        parts.append(t("ext_outerwear_prefix", lang) + value(OUTERWEAR_TYPE_VALUES, outerwear, lang))
+
+    pattern = extended.get("pattern")
+    if pattern and pattern != "khong_ro":
+        parts.append(t("ext_pattern_prefix", lang) + value(PATTERN_VALUES, pattern, lang))
+
+    if extended.get("has_glasses") == "co":
+        parts.append(t("ext_glasses", lang))
+    if extended.get("has_mask") == "co":
+        parts.append(t("ext_mask", lang))
+
+    holding = extended.get("holding_object")
+    if holding and holding not in ("khong", "khong_ro"):
+        parts.append(t("ext_holding_prefix", lang) + value(HOLDING_OBJECT_VALUES, holding, lang))
+
+    return ", ".join(parts) if parts else t("ext_no_extra_details", lang)
