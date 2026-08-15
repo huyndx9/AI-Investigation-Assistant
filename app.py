@@ -113,18 +113,21 @@ def _file_url(path: str) -> str:
     return "/gradio_api/file=" + quote(str(Path(path).resolve()).replace("\\", "/"))
 
 
-def build_player_html(case_id: str, video_id: str, candidates: list[dict], highlight_track_id: str | None) -> str:
+def build_player_html(
+    case_id: str, video_id: str, candidates: list[dict], highlight_track_id: str | None,
+    lang: str = i18n.DEFAULT_LANGUAGE,
+) -> str:
     """Video + thanh thời gian có đánh dấu các đoạn ứng viên khớp trong VIDEO
     NÀY (lọc theo video_id — timeline chỉ có ý nghĩa trong 1 video). Bấm vào
     1 vạch màu để nhảy player tới đúng giây đó. Ứng viên đang chọn (nếu có)
     được viền trắng để dễ nhận ra."""
     if not video_id:
-        return "<div style='color:#888;padding:20px;'>Chưa chọn video để xem.</div>"
+        return f"<div style='color:#888;padding:20px;'>{i18n.t('player_no_video_selected', lang)}</div>"
 
     videos = {v["video_id"]: v for v in list_videos_in_case(DB_PATH, case_id)}
     video = videos.get(video_id)
     if video is None:
-        return "<div style='color:#888;padding:20px;'>Không tìm thấy video.</div>"
+        return f"<div style='color:#888;padding:20px;'>{i18n.t('player_video_not_found', lang)}</div>"
 
     duration = (video["total_frames"] / video["fps"]) if video["fps"] else 0
     this_video_candidates = [c for c in candidates if c["video_id"] == video_id]
@@ -167,21 +170,25 @@ def build_player_html(case_id: str, video_id: str, candidates: list[dict], highl
         if c["track_id"] == highlight_track_id:
             seek_fragment = f"#t={c['first_seen_sec']}"
 
-    markers_html = "".join(marker_divs) or '<div style="color:#666;font-size:11px;padding:4px;">Chưa có ứng viên nào cho video này — bấm Tìm kiếm trước.</div>'
+    markers_html = "".join(marker_divs) or (
+        f'<div style="color:#666;font-size:11px;padding:4px;">{i18n.t("player_no_candidates_for_video", lang)}</div>'
+    )
 
     return f'''
     <div style="font-family:sans-serif;">
-      <div style="font-size:13px;color:#aaa;margin-bottom:4px;">Camera: {_video_label(video)}</div>
+      <div style="font-size:13px;color:#aaa;margin-bottom:4px;">{i18n.t("player_camera_prefix", lang)} {_video_label(video)}</div>
       <video id="aia_player" src="{video_url}{seek_fragment}" controls style="width:100%;max-height:420px;background:#000;border-radius:6px;"></video>
       <div style="position:relative;height:22px;background:#222;margin-top:6px;border-radius:4px;overflow:hidden;">
         {markers_html}
       </div>
-      <div style="font-size:11px;color:#888;margin-top:4px;">Bấm vào vạch màu trên thanh thời gian để nhảy tới đoạn nghi có đối tượng khớp.</div>
+      <div style="font-size:11px;color:#888;margin-top:4px;">{i18n.t("player_timeline_hint", lang)}</div>
     </div>
     '''
 
 
-def build_candidates_html(candidates: list[dict], all_video_labels: list[str] | None = None) -> str:
+def build_candidates_html(
+    candidates: list[dict], all_video_labels: list[str] | None = None, lang: str = i18n.DEFAULT_LANGUAGE,
+) -> str:
     """Danh sách ứng viên NHÓM THEO VIDEO — mỗi hàng là 1 video/camera, tên
     video ở đầu hàng. Trước đây dùng gr.Gallery dạng lưới phẳng: không biết
     ảnh nào thuộc video nào nếu không đọc chữ nhỏ trong caption, và ảnh bị
@@ -205,7 +212,7 @@ def build_candidates_html(candidates: list[dict], all_video_labels: list[str] | 
     thường, chỉ riêng thẻ <script> mới không — xem giải thích đầy đủ trong
     modules/geo_route.py)."""
     if not candidates and not all_video_labels:
-        return "<p style='color:#888'>Chưa có kết quả.</p>"
+        return f"<p style='color:#888'>{i18n.t('candidates_no_results', lang)}</p>"
 
     order: list[str] = []
     groups: dict[str, list[tuple[int, dict]]] = {}
@@ -234,7 +241,7 @@ def build_candidates_html(candidates: list[dict], all_video_labels: list[str] | 
             rows.append(
                 f'<div style="margin-bottom:12px;">'
                 f'<div style="font-size:13px;font-weight:600;color:#eee;margin-bottom:4px;">📹 {video_label}</div>'
-                f'<div style="font-size:12px;color:#666;">Không có đối tượng phù hợp.</div></div>'
+                f'<div style="font-size:12px;color:#666;">{i18n.t("candidates_no_match_for_video", lang)}</div></div>'
             )
             continue
         thumbs = []
@@ -262,11 +269,11 @@ def build_candidates_html(candidates: list[dict], all_video_labels: list[str] | 
     return f'<div style="font-family:sans-serif;">{"".join(rows)}</div>'
 
 
-def build_evidence_panel(candidate: dict | None) -> str:
+def build_evidence_panel(candidate: dict | None, lang: str = i18n.DEFAULT_LANGUAGE) -> str:
     """Bảng đặc điểm đầy đủ của 1 ứng viên đang chọn — tra cứu trực tiếp,
     không phải đọc văn bản dài."""
     if candidate is None:
-        return "*Chọn 1 ứng viên trong danh sách bên dưới để xem chi tiết.*"
+        return f"*{i18n.t('evidence_no_selection', lang)}*"
 
     a = candidate["track_appearance"]
 
@@ -336,7 +343,7 @@ def on_refresh_cases():
     return gr.update(choices=choices)
 
 
-def on_add_videos(case_id, video_files, camera_label, sample_fps, progress=gr.Progress()):
+def on_add_videos(case_id, video_files, camera_label, sample_fps, lang=i18n.DEFAULT_LANGUAGE, progress=gr.Progress()):
     if not case_id:
         return gr.update(), "⚠️ Chọn hoặc tạo case trước.", gr.update(), gr.update(), "", "", ""
     if not video_files:
@@ -357,7 +364,10 @@ def on_add_videos(case_id, video_files, camera_label, sample_fps, progress=gr.Pr
     # thêm video mới), nên gọi thẳng build_player_html() ở đây. Tương tự cho
     # phần vị trí camera — gọi thẳng on_geo_video_selected() thay vì trông
     # chờ video_dropdown.change() tự kích hoạt.
-    player_html = build_player_html(case_id, new_video_id, [], None) if new_video_id else "*Chưa có video.*"
+    player_html = (
+        build_player_html(case_id, new_video_id, [], None, lang=lang)
+        if new_video_id else i18n.t("clear_no_video_placeholder", lang)
+    )
     geo_addr, geo_start, geo_stat = (
         on_geo_video_selected(case_id, new_video_id) if new_video_id else ("", "", "")
     )
@@ -370,10 +380,13 @@ def on_add_videos(case_id, video_files, camera_label, sample_fps, progress=gr.Pr
     )
 
 
-def on_case_selected(case_id):
+def on_case_selected(case_id, lang=i18n.DEFAULT_LANGUAGE):
     video_choices = _video_choices(DB_PATH, case_id)
     new_video_id = video_choices[0][1] if video_choices else None
-    player_html = build_player_html(case_id, new_video_id, [], None) if new_video_id else "*Chưa có video.*"
+    player_html = (
+        build_player_html(case_id, new_video_id, [], None, lang=lang)
+        if new_video_id else i18n.t("clear_no_video_placeholder", lang)
+    )
     geo_addr, geo_start, geo_stat = (
         on_geo_video_selected(case_id, new_video_id) if new_video_id else ("", "", "")
     )
@@ -384,33 +397,34 @@ def on_case_selected(case_id):
     )
 
 
-def on_video_selected(case_id, video_id, candidates):
-    html = build_player_html(case_id, video_id, candidates or [], None)
+def on_video_selected(case_id, video_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
+    html = build_player_html(case_id, video_id, candidates or [], None, lang=lang)
     return html
 
 
-def on_clear_case_videos(case_id, confirmed):
+def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
     """Xoá toàn bộ video + dữ liệu dẫn xuất của case đang chọn. Yêu cầu tick
     xác nhận trước — thao tác không thể hoàn tác (xem clear_case_videos)."""
+    no_results = i18n.t("candidates_no_results", lang)
     if not case_id:
         return (
-            gr.update(), gr.update(), "⚠️ Chọn case trước.", gr.update(), None, "*Chưa có kết quả.*", "",
-            "*Chưa có kết quả.*", False, "", "", "",
+            gr.update(), gr.update(), "⚠️ Chọn case trước.", gr.update(), None, no_results, "",
+            no_results, False, "", "", "",
         )
     if not confirmed:
         return (
             gr.update(), gr.update(), "⚠️ Vui lòng tick xác nhận trước khi xoá.",
-            gr.update(), None, "*Chưa có kết quả.*", "", "*Chưa có kết quả.*", False, "", "", "",
+            gr.update(), None, no_results, "", no_results, False, "", "", "",
         )
 
     n = clear_case_videos(DB_PATH, case_id)
-    player_html = "*Chưa có video.*"
+    player_html = i18n.t("clear_no_video_placeholder", lang)
     return (
         gr.update(choices=[], value=None),  # video_dropdown
         gr.update(choices=_case_choices(DB_PATH), value=case_id),  # case_dropdown
         f"✅ Đã xoá {n} video khỏi case. Case hiện trống, sẵn sàng thêm video mới.",  # clear_status
         player_html,  # player
-        None, "*Chưa có kết quả.*", "", "*Chưa có kết quả.*",  # candidates_state, gallery, search_status, evidence_panel
+        None, no_results, "", no_results,  # candidates_state, gallery, search_status, evidence_panel
         False,  # clear_confirm_input (tự bỏ tick sau khi xoá xong)
         "", "", "",  # geo_address/start_time/status — reset
     )
@@ -420,18 +434,19 @@ def on_clear_case_videos(case_id, confirmed):
 # Tìm kiếm
 # ---------------------------------------------------------------------------
 
-def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress()):
+def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGUAGE, progress=gr.Progress()):
+    no_results = i18n.t("candidates_no_results", lang)
     if not case_id:
-        return None, "*Chưa có kết quả.*", "⚠️ Chọn hoặc tạo case trước.", gr.update(), "*Chưa có kết quả.*", gr.update()
+        return None, no_results, "⚠️ Chọn hoặc tạo case trước.", gr.update(), no_results, gr.update()
     if not ref_image_paths:
-        return None, "*Chưa có kết quả.*", "⚠️ Vui lòng chọn ít nhất 1 ảnh tham chiếu.", gr.update(), "*Chưa có kết quả.*", gr.update()
+        return None, no_results, "⚠️ Vui lòng chọn ít nhất 1 ảnh tham chiếu.", gr.update(), no_results, gr.update()
     if use_vlm and not vlm_compare.is_configured():
-        return None, "*Chưa có kết quả.*", f"⚠️ {vlm_compare.get_setup_instructions()}", gr.update(), "*Chưa có kết quả.*", gr.update()
+        return None, no_results, f"⚠️ {vlm_compare.get_setup_instructions()}", gr.update(), no_results, gr.update()
 
     progress(0.1, desc=f"Đang trích đặc điểm từ {len(ref_image_paths)} ảnh tham chiếu...")
     ref_features = get_reference_appearance_multi(ref_image_paths, use_vlm=use_vlm)
     if ref_features is None:
-        return None, "*Chưa có kết quả.*", "❌ Không phát hiện được người trong ảnh tham chiếu nào.", gr.update(), "*Chưa có kết quả.*", gr.update()
+        return None, no_results, "❌ Không phát hiện được người trong ảnh tham chiếu nào.", gr.update(), no_results, gr.update()
 
     progress(0.5, desc="Đang so khớp với các ứng viên trong toàn bộ case...")
     # Khi bật AI thị giác, lấy 1 tập ứng viên RỘNG HƠN "Số ứng viên hiển thị"
@@ -483,7 +498,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
 
     if not candidates:
         status = f"Đặc điểm tham chiếu: {ref_desc}{used_note}. Không tìm thấy ứng viên nào."
-        return None, build_candidates_html([], all_video_labels), status, gr.update(), "*Chưa có kết quả.*", gr.update()
+        return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update()
 
     # Lọc theo ngưỡng tin cậy tối thiểu — hiển thị ứng viên điểm quá thấp
     # (vd chỉ tình cờ trùng màu áo/quần, ngoại hình thực tế khác hẳn) dễ
@@ -497,9 +512,9 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
             f"Không tìm thấy đối tượng phù hợp — điểm khớp cao nhất chỉ đạt {best_score:.2f}, "
             f"quá thấp để tin cậy là cùng 1 người (ngưỡng {MIN_CONFIDENT_SCORE})."
         )
-        return None, build_candidates_html([], all_video_labels), status, gr.update(), "*Chưa có kết quả.*", gr.update()
+        return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update()
 
-    candidates_html = build_candidates_html(candidates, all_video_labels)
+    candidates_html = build_candidates_html(candidates, all_video_labels, lang=lang)
     videos_summary = _describe_videos_with_matches(candidates)
     status = (
         f"Đặc điểm tham chiếu: {ref_desc}{used_note}.\n\n"
@@ -508,28 +523,29 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, progress=gr.Progress())
     )
 
     top1 = candidates[0]
-    player_html = build_player_html(case_id, top1["video_id"], candidates, top1["track_id"])
+    player_html = build_player_html(case_id, top1["video_id"], candidates, top1["track_id"], lang=lang)
     video_dropdown_update = gr.update(
         choices=_video_choices(DB_PATH, case_id), value=top1["video_id"]
     )
-    evidence = build_evidence_panel(top1)
+    evidence = build_evidence_panel(top1, lang=lang)
 
     progress(1.0, desc="Xong")
     return candidates, candidates_html, status, video_dropdown_update, evidence, player_html
 
 
-def on_gallery_click(idx, case_id, candidates):
+def on_gallery_click(idx, case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
     """Cầu nối JS -> Python cho việc bấm chọn 1 ứng viên trong
     build_candidates_html() — xem giải thích cơ chế ở đó. idx là giá trị số
     do JS ghi vào ô ẩn gallery_click_index."""
+    no_results = i18n.t("candidates_no_results", lang)
     if not candidates or idx is None:
-        return gr.update(), "*Chưa có kết quả.*", gr.update()
+        return gr.update(), no_results, gr.update()
     idx = int(idx)
     if idx < 0 or idx >= len(candidates):
-        return gr.update(), "*Chưa có kết quả.*", gr.update()
+        return gr.update(), no_results, gr.update()
     c = candidates[idx]
-    player_html = build_player_html(case_id, c["video_id"], candidates, c["track_id"])
-    evidence = build_evidence_panel(c)
+    player_html = build_player_html(case_id, c["video_id"], candidates, c["track_id"], lang=lang)
+    evidence = build_evidence_panel(c, lang=lang)
     video_dropdown_update = gr.update(value=c["video_id"])
     return video_dropdown_update, evidence, player_html
 
@@ -596,11 +612,11 @@ def on_save_video_geo(video_id, address_label, start_time_text):
     return f"✅ Đã lưu: {address_label} → toạ độ ({lat:.5f}, {lng:.5f})"
 
 
-def on_show_route(case_id, candidates):
+def on_show_route(case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
     if not case_id:
-        return "<p style='color:#888'>Chọn case trước.</p>"
+        return f"<p style='color:#888'>{i18n.t('route_select_case_first', lang)}</p>"
     if not candidates:
-        return "<p style='color:#888'>Chưa có kết quả tìm kiếm — bấm 'Tìm kiếm' trước.</p>"
+        return f"<p style='color:#888'>{i18n.t('route_no_search_yet', lang)}</p>"
     geo_by_video = geo_route.get_case_geo(DB_PATH, case_id)
     points = geo_route.build_route(candidates, geo_by_video)
     n_skipped = len(candidates) - len(points)
@@ -724,7 +740,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
             with gr.Row():
                 with gr.Column(scale=2):
                     video_dropdown = gr.Dropdown(choices=[], label=t("video_dropdown_label"))
-                    player = gr.HTML(build_player_html("", "", [], None))
+                    player = gr.HTML(build_player_html("", "", [], None, lang=i18n.DEFAULT_LANGUAGE))
                 with gr.Column(scale=1):
                     geo_title_md = gr.Markdown(t("geo_section_title"))
                     geo_desc_md = gr.Markdown(t("geo_section_markdown"))
@@ -740,16 +756,16 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
 
             candidates_title_md = gr.Markdown(t("candidates_section_title"))
             candidates_subtitle_md = gr.Markdown(t("candidates_section_subtitle"))
-            gallery = gr.HTML("*Chưa có kết quả.*")
+            gallery = gr.HTML(i18n.t("candidates_no_results", i18n.DEFAULT_LANGUAGE))
             gallery_click_index = gr.Number(value=-1, elem_id="aia_gallery_idx")
 
             evidence_title_md = gr.Markdown(t("evidence_section_title"))
-            evidence_panel = gr.Markdown("*Chọn 1 ứng viên trong danh sách bên trên để xem chi tiết.*")
+            evidence_panel = gr.Markdown(f"*{i18n.t('evidence_no_selection', i18n.DEFAULT_LANGUAGE)}*")
 
             with gr.Accordion(t("route_accordion_title"), open=False) as route_accordion:
                 route_desc_md = gr.Markdown(t("route_accordion_markdown"))
                 show_route_btn = gr.Button(t("show_route_button"))
-                route_map = gr.HTML("*Chưa xem lộ trình.*")
+                route_map = gr.HTML(i18n.t("route_not_viewed_yet", i18n.DEFAULT_LANGUAGE))
 
     # ------------- wiring -------------
     geo_field_outputs = [geo_address_input, geo_start_time_input, geo_status]
@@ -772,27 +788,28 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         on_create_case, inputs=[new_case_name], outputs=[case_dropdown, new_case_name, case_status]
     )
     case_dropdown.change(
-        on_case_selected, inputs=[case_dropdown], outputs=[video_dropdown, player] + geo_field_outputs
+        on_case_selected, inputs=[case_dropdown, language_dropdown], outputs=[video_dropdown, player] + geo_field_outputs
     )
     video_files_input.upload(
         on_add_videos,
-        inputs=[case_dropdown, video_files_input, camera_label_input, sample_fps_input],
+        inputs=[case_dropdown, video_files_input, camera_label_input, sample_fps_input, language_dropdown],
         outputs=[video_dropdown, add_video_status, case_dropdown, player] + geo_field_outputs,
     )
     video_dropdown.change(
-        on_video_selected, inputs=[case_dropdown, video_dropdown, candidates_state], outputs=[player]
+        on_video_selected,
+        inputs=[case_dropdown, video_dropdown, candidates_state, language_dropdown], outputs=[player],
     )
     video_dropdown.change(
         on_geo_video_selected, inputs=[case_dropdown, video_dropdown], outputs=geo_field_outputs
     )
     search_btn.click(
         run_search,
-        inputs=[case_dropdown, ref_images_input, top_k_input, use_vlm_input],
+        inputs=[case_dropdown, ref_images_input, top_k_input, use_vlm_input, language_dropdown],
         outputs=[candidates_state, gallery, search_status, video_dropdown, evidence_panel, player],
     )
     clear_videos_btn.click(
         on_clear_case_videos,
-        inputs=[case_dropdown, clear_confirm_input],
+        inputs=[case_dropdown, clear_confirm_input, language_dropdown],
         outputs=[
             video_dropdown, case_dropdown, clear_status, player,
             candidates_state, gallery, search_status, evidence_panel, clear_confirm_input,
@@ -800,7 +817,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     )
     gallery_click_index.change(
         on_gallery_click,
-        inputs=[gallery_click_index, case_dropdown, candidates_state],
+        inputs=[gallery_click_index, case_dropdown, candidates_state, language_dropdown],
         outputs=[video_dropdown, evidence_panel, player],
     )
     refresh_cases_btn.click(on_refresh_cases, outputs=[case_dropdown])
@@ -811,7 +828,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         outputs=[geo_status],
     )
     show_route_btn.click(
-        on_show_route, inputs=[case_dropdown, candidates_state], outputs=[route_map]
+        on_show_route, inputs=[case_dropdown, candidates_state, language_dropdown], outputs=[route_map]
     )
 
 if __name__ == "__main__":

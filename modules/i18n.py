@@ -209,6 +209,50 @@ STRINGS: dict[str, dict[str, str]] = {
               "dựa trên điểm khớp, **không phải kết luận lộ trình chắc chắn**.",
     },
     "show_route_button": {"ko": "경로 보기", "en": "View route", "vi": "Xem lộ trình"},
+    # -------------------------------------------------------------------
+    # Dynamically-generated placeholder / empty-state text. These live
+    # inside HTML strings built by app.py's build_player_html(),
+    # build_candidates_html(), build_evidence_panel(), and
+    # on_clear_case_videos()/run_search()'s early-return branches -- NOT
+    # simple component defaults -- so callers must pass the current
+    # language into those functions explicitly. Does NOT cover the
+    # per-candidate match explanation sentences (still built in Vietnamese
+    # by demo_search.py) or the route map's internal markup (geo_route.py)
+    # -- those remain a separate, larger localization task.
+    # -------------------------------------------------------------------
+    "player_no_video_selected": {
+        "ko": "볼 영상을 선택하지 않았습니다.", "en": "No video selected to view.",
+        "vi": "Chưa chọn video để xem.",
+    },
+    "player_video_not_found": {"ko": "영상을 찾을 수 없습니다.", "en": "Video not found.", "vi": "Không tìm thấy video."},
+    "player_no_candidates_for_video": {
+        "ko": "이 영상에는 아직 후보가 없습니다 — 먼저 검색을 눌러주세요.",
+        "en": "No candidates for this video yet — click Search first.",
+        "vi": "Chưa có ứng viên nào cho video này — bấm Tìm kiếm trước.",
+    },
+    "player_timeline_hint": {
+        "ko": "타임라인의 색상 막대를 클릭하면 일치 의심 구간으로 이동합니다.",
+        "en": "Click a colored bar on the timeline to jump to a suspected matching segment.",
+        "vi": "Bấm vào vạch màu trên thanh thời gian để nhảy tới đoạn nghi có đối tượng khớp.",
+    },
+    "player_camera_prefix": {"ko": "카메라:", "en": "Camera:", "vi": "Camera:"},
+    "clear_no_video_placeholder": {"ko": "*아직 영상이 없습니다.*", "en": "*No video yet.*", "vi": "*Chưa có video.*"},
+    "candidates_no_results": {"ko": "*아직 결과가 없습니다.*", "en": "*No results yet.*", "vi": "*Chưa có kết quả.*"},
+    "candidates_no_match_for_video": {
+        "ko": "일치하는 대상이 없습니다.", "en": "No matching object.", "vi": "Không có đối tượng phù hợp.",
+    },
+    "evidence_no_selection": {
+        "ko": "위 목록에서 후보를 선택하면 상세 정보가 표시됩니다.",
+        "en": "Select a candidate in the list above to see details.",
+        "vi": "Chọn 1 ứng viên trong danh sách bên trên để xem chi tiết.",
+    },
+    "route_select_case_first": {"ko": "먼저 사건을 선택하세요.", "en": "Select a case first.", "vi": "Chọn case trước."},
+    "route_no_search_yet": {
+        "ko": "아직 검색 결과가 없습니다 — 먼저 '검색'을 눌러주세요.",
+        "en": "No search results yet — click 'Search' first.",
+        "vi": "Chưa có kết quả tìm kiếm — bấm 'Tìm kiếm' trước.",
+    },
+    "route_not_viewed_yet": {"ko": "*아직 경로를 보지 않았습니다.*", "en": "*Route not viewed yet.*", "vi": "*Chưa xem lộ trình.*"},
 }
 
 
