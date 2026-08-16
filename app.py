@@ -56,6 +56,66 @@ DB_PATH = "case.db"
 OUTPUT_DIR = str(Path("output").resolve())
 MARKER_COLORS = ["#ff5252", "#4caf50", "#2196f3", "#ffc107", "#e040fb", "#00bcd4", "#ff9800", "#8bc34a"]
 
+# Gradio's File component renders its own "Drop File Here / or / Click to
+# Upload" hint text via Gradio's built-in i18n, which picks a locale from
+# the BROWSER's language setting -- entirely separate from this app's
+# language_dropdown, and Gradio 6.22 has no Vietnamese translation bundled
+# at all (falls back to English). Patched by directly rewriting the DOM text
+# nodes inside each file-upload button, keyed structurally (icon span + "or"
+# span) rather than by matching source text.
+#
+# Gradio's own frontend re-renders this hint asynchronously as its i18n
+# resources finish loading, AFTER our first patch attempt -- a one-shot
+# patch gets raced and ends up with garbled/duplicated text once Gradio's
+# own render lands on top of ours. Fixed by re-applying on a persistent
+# interval FOREVER (not just until the element first appears), and by fully
+# REMOVING and rebuilding the text nodes each pass (rather than mutating
+# them in place) so repeated passes stay idempotent instead of accumulating
+# duplicates no matter how many times Gradio's own reactive re-render fires
+# in between our passes.
+_UPLOAD_TEXT_PATCH_FN = """
+function __aiaPatchUploadText(lang) {
+  const TEXT = {
+    ko: {drop: "파일을 여기에 드롭", or: "또는", click: "클릭하여 업로드"},
+    en: {drop: "Drop File Here", or: "or", click: "Click to Upload"},
+    vi: {drop: "Kéo file vào đây", or: "hoặc", click: "Nhấn để tải lên"},
+  };
+  const t = TEXT[lang] || TEXT.en;
+  document.querySelectorAll('input[type="file"]').forEach(function (inp) {
+    const btn = inp.closest("button");
+    const iconWrap = btn ? btn.querySelector(".icon-wrap") : null;
+    const wrap = iconWrap ? iconWrap.parentElement : null;
+    const orSpan = wrap ? wrap.querySelector(".or") : null;
+    if (!wrap || !orSpan) return;
+    Array.from(wrap.childNodes).forEach(function (n) {
+      if (n.nodeType === 3) wrap.removeChild(n);
+    });
+    wrap.insertBefore(document.createTextNode(" " + t.drop + " "), orSpan);
+    wrap.appendChild(document.createTextNode(" " + t.click));
+    orSpan.textContent = "- " + t.or + " -";
+  });
+}
+"""
+
+UPLOAD_TEXT_PATCH_LOAD_JS = f"""
+() => {{
+  {_UPLOAD_TEXT_PATCH_FN}
+  if (window.__aiaUploadPatchStarted) return;
+  window.__aiaUploadPatchStarted = true;
+  window.__aiaLang = "{i18n.DEFAULT_LANGUAGE}";
+  setInterval(() => __aiaPatchUploadText(window.__aiaLang), 800);
+}}
+"""
+
+UPLOAD_TEXT_PATCH_CHANGE_JS = f"""
+(lang) => {{
+  {_UPLOAD_TEXT_PATCH_FN}
+  window.__aiaLang = lang;
+  __aiaPatchUploadText(lang);
+  return lang;
+}}
+"""
+
 
 # ---------------------------------------------------------------------------
 # Trợ giúp hiển thị
@@ -422,12 +482,12 @@ def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
     if not case_id:
         return (
             gr.update(), gr.update(), i18n.t("clear_err_no_case", lang), gr.update(), None, no_results, "",
-            no_results, False, "", "", "",
+            no_results, False, "", "", "", None,
         )
     if not confirmed:
         return (
             gr.update(), gr.update(), i18n.t("clear_err_not_confirmed", lang),
-            gr.update(), None, no_results, "", no_results, False, "", "", "",
+            gr.update(), None, no_results, "", no_results, False, "", "", "", None,
         )
 
     n = clear_case_videos(DB_PATH, case_id)
@@ -440,6 +500,7 @@ def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
         None, no_results, "", no_results,  # candidates_state, gallery, search_status, evidence_panel
         False,  # clear_confirm_input (tự bỏ tick sau khi xoá xong)
         "", "", "",  # geo_address/start_time/status — reset
+        None,  # selected_track_id_state — reset
     )
 
 
@@ -450,16 +511,16 @@ def on_clear_case_videos(case_id, confirmed, lang=i18n.DEFAULT_LANGUAGE):
 def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGUAGE, progress=gr.Progress()):
     no_results = i18n.t("candidates_no_results", lang)
     if not case_id:
-        return None, no_results, i18n.t("search_err_no_case", lang), gr.update(), no_results, gr.update()
+        return None, no_results, i18n.t("search_err_no_case", lang), gr.update(), no_results, gr.update(), None
     if not ref_image_paths:
-        return None, no_results, i18n.t("search_err_no_ref_images", lang), gr.update(), no_results, gr.update()
+        return None, no_results, i18n.t("search_err_no_ref_images", lang), gr.update(), no_results, gr.update(), None
     if use_vlm and not vlm_compare.is_configured():
-        return None, no_results, f"⚠️ {vlm_compare.get_setup_instructions(lang)}", gr.update(), no_results, gr.update()
+        return None, no_results, f"⚠️ {vlm_compare.get_setup_instructions(lang)}", gr.update(), no_results, gr.update(), None
 
     progress(0.1, desc=i18n.t("search_progress_extract", lang).format(n=len(ref_image_paths)))
     ref_features = get_reference_appearance_multi(ref_image_paths, use_vlm=use_vlm, lang=lang)
     if ref_features is None:
-        return None, no_results, i18n.t("search_err_no_person_detected", lang), gr.update(), no_results, gr.update()
+        return None, no_results, i18n.t("search_err_no_person_detected", lang), gr.update(), no_results, gr.update(), None
 
     progress(0.5, desc=i18n.t("search_progress_match", lang))
     # Khi bật AI thị giác, lấy 1 tập ứng viên RỘNG HƠN "Số ứng viên hiển thị"
@@ -513,7 +574,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
 
     if not candidates:
         status = f"{ref_features_prefix} {ref_desc}{used_note}. {i18n.t('search_no_candidates', lang)}"
-        return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update()
+        return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update(), None
 
     # Lọc theo ngưỡng tin cậy tối thiểu — hiển thị ứng viên điểm quá thấp
     # (vd chỉ tình cờ trùng màu áo/quần, ngoại hình thực tế khác hẳn) dễ
@@ -526,7 +587,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
             best=best_score, threshold=MIN_CONFIDENT_SCORE,
         )
         status = f"{ref_features_prefix} {ref_desc}{used_note}. {low_confidence}"
-        return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update()
+        return None, build_candidates_html([], all_video_labels, lang=lang), status, gr.update(), no_results, gr.update(), None
 
     candidates_html = build_candidates_html(candidates, all_video_labels, lang=lang)
     videos_summary = _describe_videos_with_matches(candidates, lang=lang)
@@ -546,7 +607,7 @@ def run_search(case_id, ref_image_paths, top_k, use_vlm, lang=i18n.DEFAULT_LANGU
     evidence = build_evidence_panel(top1, lang=lang)
 
     progress(1.0, desc=i18n.t("search_progress_done", lang))
-    return candidates, candidates_html, status, video_dropdown_update, evidence, player_html
+    return candidates, candidates_html, status, video_dropdown_update, evidence, player_html, top1["track_id"]
 
 
 def on_gallery_click(idx, case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
@@ -555,15 +616,15 @@ def on_gallery_click(idx, case_id, candidates, lang=i18n.DEFAULT_LANGUAGE):
     do JS ghi vào ô ẩn gallery_click_index."""
     no_results = i18n.t("candidates_no_results", lang)
     if not candidates or idx is None:
-        return gr.update(), no_results, gr.update()
+        return gr.update(), no_results, gr.update(), gr.update()
     idx = int(idx)
     if idx < 0 or idx >= len(candidates):
-        return gr.update(), no_results, gr.update()
+        return gr.update(), no_results, gr.update(), gr.update()
     c = candidates[idx]
     player_html = build_player_html(case_id, c["video_id"], candidates, c["track_id"], lang=lang)
     evidence = build_evidence_panel(c, lang=lang)
     video_dropdown_update = gr.update(value=c["video_id"])
-    return video_dropdown_update, evidence, player_html
+    return video_dropdown_update, evidence, player_html, c["track_id"]
 
 
 # ---------------------------------------------------------------------------
@@ -646,14 +707,34 @@ def t(key: str) -> str:
     return i18n.t(key, i18n.DEFAULT_LANGUAGE)
 
 
-def apply_language(lang: str):
+def apply_language(lang: str, case_id, video_id, candidates, selected_track_id):
     """Update every STATIC UI-chrome component's label/value/info to the
-    selected language. Deliberately does NOT touch components whose content
-    is generated at request time (case_status, add_video_status, clear_status,
-    search_status, geo_status, player, gallery, evidence_panel, route_map) --
-    those are still built in Vietnamese by app.py/demo_search.py/geo_route.py
-    (see modules/i18n.py docstring) and would immediately overwrite a
-    translated placeholder on the next interaction anyway."""
+    selected language, AND re-render player/gallery/evidence_panel using the
+    current state (candidates_state + selected_track_id_state) so that
+    already-shown search results switch language too instead of staying
+    frozen in whatever language was active when they were generated. Still
+    does NOT touch case_status/add_video_status/clear_status/search_status/
+    geo_status -- those are one-off action results, not something the user
+    expects to see retranslated after the fact. route_map is reset to its
+    "not viewed yet" placeholder rather than recomputed, since a stale route
+    is cheap to regenerate by clicking the button again.
+
+    candidates_state distinguishes "never searched yet" ([], its gr.State
+    default) from "searched, zero qualifying results" (None, set explicitly
+    by run_search's early-return branches) -- only the latter should render
+    the per-video "no matching object" breakdown; showing that breakdown
+    before any search has actually run would misleadingly imply one did."""
+    never_searched = candidates == []
+    candidates = candidates or []
+    all_video_labels = (
+        None if never_searched else
+        ([label for label, _ in _video_choices(DB_PATH, case_id)] if case_id else None)
+    )
+    player_html = build_player_html(case_id, video_id, candidates, selected_track_id, lang=lang)
+    gallery_html = build_candidates_html(candidates, all_video_labels, lang=lang)
+    selected_candidate = next((c for c in candidates if c["track_id"] == selected_track_id), None)
+    evidence_html = build_evidence_panel(selected_candidate, lang=lang)
+    route_html = i18n.t("route_not_viewed_yet", lang)
     return (
         gr.update(value=i18n.t("app_header", lang)),
         gr.update(value=i18n.t("case_section_title", lang)),
@@ -687,11 +768,13 @@ def apply_language(lang: str):
         gr.update(label=i18n.t("route_accordion_title", lang)),
         gr.update(value=i18n.t("route_accordion_markdown", lang)),
         gr.update(value=i18n.t("show_route_button", lang)),
+        player_html, gallery_html, evidence_html, route_html,
     )
 
 
 with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     candidates_state = gr.State([])
+    selected_track_id_state = gr.State(None)
     # gr.Number(visible=False) KHÔNG mount DOM trong Gradio 6 (đã xác nhận
     # thực tế: querySelector không tìm thấy input) — nên ô cầu nối JS->Python
     # cho build_candidates_html() phải để visible=True rồi tự ẩn bằng CSS ở
@@ -784,7 +867,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
 
     language_dropdown.change(
         apply_language,
-        inputs=[language_dropdown],
+        inputs=[language_dropdown, case_dropdown, video_dropdown, candidates_state, selected_track_id_state],
         outputs=[
             header_md, case_section_title_md, case_dropdown, new_case_name, create_case_btn,
             add_video_title_md, video_files_input, camera_label_input, sample_fps_input,
@@ -793,6 +876,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
             view_video_title_md, video_dropdown, geo_title_md, geo_desc_md, geo_address_input,
             geo_start_time_input, geo_save_btn, candidates_title_md, candidates_subtitle_md,
             evidence_title_md, route_accordion, route_desc_md, show_route_btn,
+            player, gallery, evidence_panel, route_map,
         ],
     )
 
@@ -818,7 +902,7 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
     search_btn.click(
         run_search,
         inputs=[case_dropdown, ref_images_input, top_k_input, use_vlm_input, language_dropdown],
-        outputs=[candidates_state, gallery, search_status, video_dropdown, evidence_panel, player],
+        outputs=[candidates_state, gallery, search_status, video_dropdown, evidence_panel, player, selected_track_id_state],
     )
     clear_videos_btn.click(
         on_clear_case_videos,
@@ -826,12 +910,12 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         outputs=[
             video_dropdown, case_dropdown, clear_status, player,
             candidates_state, gallery, search_status, evidence_panel, clear_confirm_input,
-        ] + geo_field_outputs,
+        ] + geo_field_outputs + [selected_track_id_state],
     )
     gallery_click_index.change(
         on_gallery_click,
         inputs=[gallery_click_index, case_dropdown, candidates_state, language_dropdown],
-        outputs=[video_dropdown, evidence_panel, player],
+        outputs=[video_dropdown, evidence_panel, player, selected_track_id_state],
     )
     refresh_cases_btn.click(on_refresh_cases, outputs=[case_dropdown])
 
@@ -844,5 +928,20 @@ with gr.Blocks(title="AI Investigation Assistant — Demo") as demo:
         on_show_route, inputs=[case_dropdown, candidates_state, language_dropdown], outputs=[route_map]
     )
 
+    # Gradio's OWN built-in widget text (the File component's "Drop File
+    # Here / or / Click to Upload" hint) is translated by Gradio's frontend
+    # based on the BROWSER's language, completely independent of our custom
+    # language_dropdown -- and Gradio 6.22 doesn't even ship a Vietnamese
+    # translation, so it falls back to English regardless. Patched directly
+    # via injected JS: once on page load (matching DEFAULT_LANGUAGE, in case
+    # the browser's own locale doesn't match), then again whenever
+    # language_dropdown changes.
+    demo.load(js=UPLOAD_TEXT_PATCH_LOAD_JS)
+    language_dropdown.change(
+        fn=None, inputs=[language_dropdown], outputs=None, js=UPLOAD_TEXT_PATCH_CHANGE_JS,
+    )
+
 if __name__ == "__main__":
-    demo.queue().launch(server_name="127.0.0.1", server_port=7860, allowed_paths=[OUTPUT_DIR])
+    demo.queue().launch(
+        server_name="127.0.0.1", server_port=7860, allowed_paths=[OUTPUT_DIR], inbrowser=True,
+    )
