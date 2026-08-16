@@ -1,90 +1,90 @@
-# AI Investigation Assistant — Prototype
+# AI Investigation Assistant — 프로토타입
 
-Công cụ hỗ trợ điều tra viên tìm kiếm 1 người qua nhiều video camera giám sát, dựa vào **đặc điểm ngoại hình** (quần áo, dáng người) — không phải nhận diện khuôn mặt.
+여러 CCTV 카메라 영상에서 한 사람을 찾도록 돕는 수사 지원 도구입니다. **외형 특징**(옷차림, 체형)을 기반으로 하며, 얼굴 인식이 아닙니다.
 
-> ⚠️ **Đây là PROTOTYPE minh hoạ**, không phải sản phẩm hoàn chỉnh. Xem mục [Giới hạn đã biết](#giới-hạn-đã-biết--chưa-sẵn-sàng-cho-thực-tế) trước khi cân nhắc dùng cho ca thật.
+> ⚠️ **이것은 시연용 프로토타입**이며 완성된 제품이 아닙니다. 실제 사건에 사용하기 전에 [알려진 한계](#알려진-한계--아직-실전-투입-준비-안-됨) 항목을 먼저 확인하세요.
 
-## Động lực
+## 제작 동기
 
-Dự án này bắt đầu sau khi tác giả đọc được [bản tin về 1 vụ án](https://www.yonhapnewstv.co.kr/news/AKR202608030945281Z0) mà đến nay kẻ gây án vẫn chưa bị bắt và chịu trách nhiệm trước pháp luật. Cảm giác phẫn nộ trước việc đó là lý do trực tiếp thôi thúc xây dựng công cụ này — với hy vọng rút ngắn thời gian điều tra viên phải bỏ ra để rà soát hàng giờ camera giám sát, tăng khả năng lần ra manh mối trong các vụ án tương tự.
+이 프로젝트는 제작자가 [한 사건에 대한 뉴스 기사](https://www.yonhapnewstv.co.kr/news/AKR202608030945281Z0)를 읽은 후 시작되었습니다. 이 사건은 아직 범인이 붙잡혀 법적 책임을 지지 않은 상태입니다. 이에 대한 분노가 이 도구를 만들게 된 직접적인 계기이며, 수사관이 몇 시간씩 CCTV 영상을 뒤지는 시간을 줄이고 비슷한 사건에서 단서를 찾을 가능성을 높이고자 하는 바람에서 출발했습니다.
 
-Đây cũng chính là lý do các nguyên tắc **Human in the Loop / Không kết luận danh tính** được đặt làm ưu tiên xuyên suốt — công cụ chỉ nhằm hỗ trợ điều tra viên tìm đúng người nhanh hơn, không thay thế quy trình điều tra và xét xử đúng pháp luật.
+이것이 바로 **Human in the Loop(사람이 최종 판단) / 신원 단정 금지** 원칙을 처음부터 끝까지 최우선으로 삼은 이유이기도 합니다 — 이 도구는 수사관이 올바른 사람을 더 빨리 찾도록 돕는 것뿐이며, 적법한 수사 및 재판 절차를 대체하지 않습니다.
 
-## Đây KHÔNG PHẢI là gì
+## 이것은 무엇이 아닌가
 
-- **Không phải nhận diện khuôn mặt** — không trích xuất, không so sánh đặc điểm khuôn mặt.
-- **Không kết luận danh tính.** Mọi kết quả là "ứng viên có đặc điểm khớp", kèm điểm số + giải thích — điều tra viên tự xem lại bằng chứng (video, ảnh crop) và tự quyết định.
-- **Không suy luận giới tính, tuổi tác, chủng tộc** — chủ động loại bỏ khỏi thiết kế vì CCTV độ phân giải thấp không đủ tin cậy cho việc này, và suy luận sai dễ khiến điều tra viên loại nhầm đúng người.
+- **얼굴 인식이 아닙니다** — 얼굴 특징을 추출하거나 비교하지 않습니다.
+- **신원을 단정하지 않습니다.** 모든 결과는 "특징이 일치하는 후보"일 뿐이며, 점수와 근거가 함께 제공됩니다 — 수사관이 직접 증거(영상, 크롭 이미지)를 검토하고 스스로 판단합니다.
+- **성별, 나이, 인종을 추론하지 않습니다** — 저해상도 CCTV로는 신뢰할 수 없는 판단이며, 잘못된 추론이 정작 맞는 사람을 후보에서 제외시킬 위험이 있어 설계 단계에서 의도적으로 배제했습니다.
 
-Ba nguyên tắc trên xuyên suốt toàn bộ pipeline — xem thêm [`docs/PRD_AI_Investigation_Assistant_v0.1.md`](docs/PRD_AI_Investigation_Assistant_v0.1.md).
+이 세 가지 원칙은 전체 파이프라인을 관통합니다 — 자세한 내용은 [`docs/PRD_AI_Investigation_Assistant_v0.1.md`](docs/PRD_AI_Investigation_Assistant_v0.1.md)를 참고하세요.
 
-## Tính năng chính
+## 주요 기능
 
-- **Quản lý case nhiều video/camera** — gom nhiều nguồn video vào 1 vụ án, tìm kiếm chạy trên toàn bộ.
-- **Tự động thêm video khi tải lên** — không cần bấm nút riêng, video được xử lý (phát hiện người + theo dõi + trích đặc điểm) ngay khi upload.
-- **Tìm theo ảnh tham chiếu** — hỗ trợ nhiều ảnh cùng 1 người (nhiều góc/khoảnh khắc), gộp bằng bỏ phiếu đa số.
-- **So khớp 2 tầng**: đặc điểm ngoại hình rời rạc (màu áo/quần, tay áo, mũ, tóc, giày — OpenCV thuần, chạy local) kết hợp với **embedding ReID** (mô hình `yolo26n-reid.onnx`, đo độ tương đồng dáng người/trang phục tổng thể).
-- **Tinh chỉnh bằng AI thị giác (tuỳ chọn, opt-in)** — gửi ảnh crop cho ChatGPT Vision so sánh lại top ứng viên, có giải thích bằng tiếng Việt; đồng thời có thể dùng AI mô tả trực tiếp đặc điểm ảnh tham chiếu (túi/balo, loại trang phục, hoạ tiết, phụ kiện...) thay cho heuristic màu cổ điển khi ánh sáng/tóc gây nhiễu.
-- **Kết quả theo từng video, không bị 1 camera "chiếm hết chỗ"** — mỗi video/camera luôn được xét công bằng, tối đa N ứng viên hiển thị mỗi video (không phải toàn case).
-- **Trình phát video có timeline đánh dấu** — bấm vào ứng viên để nhảy thẳng tới đoạn nghi có đối tượng.
-- **Lộ trình trên bản đồ (mở rộng, tuỳ chọn)** — thiết lập vị trí + giờ quay thực cho từng camera, hệ thống nối các lần xuất hiện theo thời gian thành gợi ý lộ trình (không phải kết luận chắc chắn), mỗi camera chỉ 1 điểm đại diện.
+- **여러 영상/카메라를 아우르는 사건(case) 관리** — 여러 출처의 영상을 하나의 사건으로 모아 전체에 대해 검색을 실행합니다.
+- **영상 업로드 시 자동 추가** — 별도 버튼 없이, 업로드하는 즉시 영상이 처리됩니다 (사람 탐지 + 추적 + 특징 추출).
+- **참조 이미지로 검색** — 같은 사람의 여러 이미지(다양한 각도/순간)를 지원하며, 다수결 투표로 통합합니다.
+- **2단계 매칭**: 개별 외형 특징(상의/하의 색상, 소매, 모자, 머리, 신발 — 순수 OpenCV, 로컬 실행)과 **ReID 임베딩**(`yolo26n-reid.onnx` 모델, 전체적인 체형/복장 유사도 측정)을 결합합니다.
+- **시각 AI를 이용한 정밀 비교 (선택 사항, opt-in)** — 크롭 이미지를 ChatGPT Vision에 보내 상위 후보를 다시 비교하고 근거를 제공합니다. 조명이나 머리카락으로 인해 색상 판단이 어려울 때는, 고전적인 색상 휴리스틱 대신 AI가 참조 이미지의 특징을 직접 설명하도록 할 수도 있습니다.
+- **영상별 결과 — 특정 카메라가 결과를 독점하지 않음** — 모든 영상/카메라가 공정하게 검토되며, 영상당 최대 N명의 후보만 표시됩니다 (사건 전체 기준이 아님).
+- **타임라인 마커가 있는 영상 플레이어** — 후보를 클릭하면 의심되는 구간으로 바로 이동합니다.
+- **지도 위 경로 (확장 기능, 선택 사항)** — 각 카메라의 위치와 실제 촬영 시각을 설정하면, 시스템이 출현 시점을 시간순으로 연결해 경로를 제안합니다 (확정된 결론이 아님) — 카메라당 대표 지점 1개만 표시됩니다.
 
-## Kiến trúc / các module
+## 아키텍처 / 모듈 구성
 
-| File | Vai trò |
+| 파일 | 역할 |
 |---|---|
-| `app.py` | Giao diện Gradio — điều phối toàn bộ luồng, không chứa logic AI. |
-| `modules/pipeline_ingest.py` | **Module 1** — giải mã video, lấy mẫu khung hình, phát hiện + theo dõi người (YOLO segmentation + ByteTrack), lưu track/crop vào DB. |
-| `modules/appearance.py` | **Module 2** — trích đặc điểm ngoại hình tĩnh (màu áo/quần, tay áo, mũ, tóc, giày) từ 1 crop bằng OpenCV thuần (HSV histogram), không so sánh giữa các track. |
-| `modules/embedding.py` | Trích embedding ReID (512 chiều) từ crop qua `yolo26n-reid.onnx` — tín hiệu so khớp chính, mạnh hơn màu sắc rời rạc. |
-| `modules/vlm_compare.py` | Tích hợp OpenAI Vision (opt-in) — so sánh ảnh tham chiếu với ứng viên, và mô tả trực tiếp đặc điểm ảnh tham chiếu. |
-| `modules/demo_search.py` | Ghép các tín hiệu trên thành điểm khớp cuối, xếp hạng theo từng video — **PROTOTYPE cho bước so khớp, không phải thiết kế Evidence Fusion đầy đủ theo PRD**. |
-| `modules/geo_route.py` | Module mở rộng, tách biệt hoàn toàn khỏi schema cốt lõi — vị trí camera + giờ quay thực + dựng lộ trình trên bản đồ (Leaflet/OpenStreetMap). |
-| `modules/video_transcode.py` | Chuyển mã video gốc sang H.264/mp4 để phát được trên trình duyệt — không đụng tới file gốc dùng cho xử lý AI. |
-| `modules/highlight_video.py` | Dựng bản video có vẽ khung/nhãn cho track ứng viên, phục vụ xem trực tiếp trong UI. |
-| `modules/visualize_tracks.py` | Công cụ debug — vẽ lại bbox/track_id đã lưu trong DB để tự kiểm tra bằng mắt (không chạy lại model). |
+| `app.py` | Gradio 인터페이스 — 전체 흐름을 조율하며 AI 로직은 포함하지 않습니다. |
+| `modules/pipeline_ingest.py` | **모듈 1** — 영상 디코딩, 프레임 샘플링, 사람 탐지 + 추적(YOLO segmentation + ByteTrack), track/crop을 DB에 저장. |
+| `modules/appearance.py` | **모듈 2** — 순수 OpenCV(HSV 히스토그램)로 1개 crop에서 정적 외형 특징(상의/하의 색상, 소매, 모자, 머리, 신발)을 추출하며, track 간 비교는 하지 않습니다. |
+| `modules/embedding.py` | `yolo26n-reid.onnx`를 통해 crop에서 ReID 임베딩(512차원)을 추출 — 색상보다 강력한 주요 매칭 신호. |
+| `modules/vlm_compare.py` | OpenAI Vision 연동 (opt-in) — 참조 이미지와 후보를 비교하고, 참조 이미지의 특징을 직접 설명. |
+| `modules/demo_search.py` | 위 신호들을 결합해 최종 일치 점수를 계산하고 영상별로 순위를 매김 — **매칭 단계의 프로토타입이며, PRD에서 정의한 완전한 Evidence Fusion 설계가 아닙니다**. |
+| `modules/geo_route.py` | 핵심 스키마와 완전히 분리된 확장 모듈 — 카메라 위치 + 실제 촬영 시각 + 지도 위 경로 구성 (Leaflet/OpenStreetMap). |
+| `modules/video_transcode.py` | 원본 영상을 브라우저에서 재생 가능한 H.264/mp4로 변환 — AI 처리에 쓰이는 원본 파일은 건드리지 않습니다. |
+| `modules/highlight_video.py` | 후보 track에 박스/라벨을 그린 영상을 만들어 UI에서 바로 볼 수 있게 합니다. |
+| `modules/visualize_tracks.py` | 디버그용 도구 — DB에 저장된 bbox/track_id를 다시 그려 육안으로 확인 (모델을 다시 실행하지 않음). |
 
-Dữ liệu lưu trong SQLite (`case.db`): `cases`, `videos`, `tracks`, `track_crops`, `features_appearance`, `features_embedding`, và bảng phụ `video_geo` (module mở rộng).
+데이터는 SQLite(`case.db`)에 저장됩니다: `cases`, `videos`, `tracks`, `track_crops`, `features_appearance`, `features_embedding`, 그리고 확장 모듈용 보조 테이블 `video_geo`.
 
-## Cài đặt
+## 설치
 
-Yêu cầu Python 3.14 trở lên. Xem `requirements.txt` để biết chi tiết — lưu ý riêng phần `torch`/`torchvision`/`onnxruntime-gpu` gắn với 1 tag CUDA cụ thể, đọc kỹ comment đầu file trước khi cài hoặc nâng cấp.
+Python 3.14 이상이 필요합니다. 자세한 내용은 `requirements.txt`를 참고하세요 — 특히 `torch`/`torchvision`/`onnxruntime-gpu`는 특정 CUDA 태그에 종속되므로, 설치/업그레이드 전에 파일 상단의 주석을 꼭 읽어보세요.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-`ffmpeg` không cần cài hệ thống — dùng binary tĩnh đóng gói sẵn trong `imageio-ffmpeg`.
+`ffmpeg`는 시스템에 별도로 설치할 필요 없습니다 — `imageio-ffmpeg`에 포함된 정적 바이너리를 사용합니다.
 
-### Cấu hình AI thị giác (tuỳ chọn)
+### 시각 AI 설정 (선택 사항)
 
-Tính năng "Dùng AI thị giác (ChatGPT Vision)" cần biến môi trường `OPENAI_API_KEY`. Tạo file `.env` ở thư mục gốc (không commit file này):
+"시각 AI 사용 (ChatGPT Vision)" 기능을 사용하려면 환경 변수 `OPENAI_API_KEY`가 필요합니다. 프로젝트 루트에 `.env` 파일을 만드세요 (이 파일은 커밋하지 마세요):
 
 ```
-OPENAI_API_KEY=<api-key-của-bạn>
+OPENAI_API_KEY=<본인의-api-key>
 ```
 
-Không bật tính năng này thì toàn bộ hệ thống chạy hoàn toàn local, không gửi dữ liệu ra ngoài.
+이 기능을 켜지 않으면 전체 시스템이 완전히 로컬에서만 동작하며, 외부로 데이터를 전송하지 않습니다.
 
-## Chạy thử
+## 실행
 
 ```bash
 python app.py
 ```
 
-Mở `http://localhost:7860`.
+`http://localhost:7860`에서 열립니다. (또는 `Start App.bat`를 더블클릭해서 실행할 수도 있습니다.)
 
-**Quy trình cơ bản**: Tạo case → tải video lên (tự động xử lý) → tải ảnh tham chiếu (người cần tìm) → bấm Tìm kiếm → xem danh sách video có đối tượng xuất hiện + ứng viên phù hợp → bấm vào 1 ứng viên để xem trên video + đọc chi tiết bằng chứng.
+**기본 흐름**: 사건 생성 → 영상 업로드 (자동 처리) → 참조 이미지 업로드 (찾을 사람) → 검색 클릭 → 대상이 나타난 영상 목록 + 일치하는 후보 확인 → 후보를 클릭해 영상에서 확인 + 증거 상세 정보 확인.
 
-## Giới hạn đã biết — chưa sẵn sàng cho thực tế
+## 알려진 한계 — 아직 실전 투입 준비 안 됨
 
-- **Chỉ là công cụ lọc sơ bộ (triage), không phải công cụ ra quyết định.** Độ tương đồng ReID đo thực tế có đuôi phân phối chồng lấn giữa "cùng người" và "khác người" (vd 0.35-0.56 cho ca khó cùng người, tới 0.8 cho ca khác người) — là tín hiệu xếp hạng, không phải bằng chứng chắc chắn.
-- **Không xử lý được đổi trang phục** hoặc nhiều người mặc đồ giống nhau (đồng phục...).
-- **Chưa có nhật ký kiểm toán (audit log)** — ai tìm gì, lúc nào — thường là yêu cầu bắt buộc nếu dùng làm chứng cứ pháp lý.
-- **Chưa được kiểm chứng trên tập dữ liệu lớn/đa dạng có ground-truth** — các ngưỡng/trọng số hiện tại chỉ hiệu chỉnh từ vài ca test nhỏ (ghi rõ trong code).
-- **Geocode địa chỉ chi tiết ở Hàn Quốc qua OpenStreetMap (miễn phí) độ chính xác còn hạn chế** — cần geocoder chuyên cho Hàn Quốc nếu độ chính xác vị trí quan trọng.
-- **Chưa đánh giá ràng buộc pháp lý/quyền riêng tư** (vd PIPA tại Hàn Quốc) cho loại phân tích video giám sát này.
+- **1차 선별(triage) 도구일 뿐, 최종 판단 도구가 아닙니다.** 실측한 ReID 유사도는 "동일 인물"과 "다른 인물" 사이에 분포가 겹치는 구간이 있습니다 (예: 동일 인물인데 어려운 케이스는 0.35~0.56, 다른 인물인데 0.8까지 나오는 경우도 있음) — 이는 순위를 매기는 신호일 뿐, 확정적 증거가 아닙니다.
+- **옷을 갈아입은 경우**나 **여러 명이 비슷한 옷(제복 등)을 입은 경우**는 처리하지 못합니다.
+- **감사 로그(audit log)가 아직 없습니다** — 누가 언제 무엇을 검색했는지 기록 — 법적 증거로 사용하려면 대개 필수 요건입니다.
+- **크고 다양한 ground-truth 데이터셋으로 검증되지 않았습니다** — 현재 임계값/가중치는 몇 개의 소규모 테스트 케이스만으로 조정된 값입니다 (코드에 명시되어 있음).
+- **한국 내 상세 주소의 OpenStreetMap(무료) 지오코딩 정확도가 제한적입니다** — 위치 정확도가 중요하다면 한국 전용 지오코더가 필요합니다.
+- **이런 종류의 CCTV 영상 분석에 대한 법적/개인정보 제약(예: 한국의 개인정보보호법 PIPA)을 아직 검토하지 않았습니다.**
 
-## Trạng thái dự án
+## 프로젝트 현황
 
-Prototype minh hoạ Module 1 (ingest + track) + Module 2 (appearance) + các mở rộng thử nghiệm (ReID, AI thị giác, bản đồ). Chưa phải giao diện Phase 1 MVP đầy đủ theo [`docs/PRD_AI_Investigation_Assistant_v0.1.md`](docs/PRD_AI_Investigation_Assistant_v0.1.md) (thiếu audit log, thiết kế Evidence Fusion chính thức do AI Reasoning team sở hữu).
+모듈 1(수집 + 추적) + 모듈 2(외형 특징)와 실험적 확장 기능(ReID, 시각 AI, 지도)을 시연하는 프로토타입입니다. [`docs/PRD_AI_Investigation_Assistant_v0.1.md`](docs/PRD_AI_Investigation_Assistant_v0.1.md)에서 정의한 Phase 1 MVP 인터페이스를 완전히 구현한 상태는 아닙니다 (감사 로그 부재, AI Reasoning 팀이 소유하는 공식 Evidence Fusion 설계 미구현).
